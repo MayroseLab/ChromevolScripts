@@ -1,0 +1,5 @@
+To run chromevol on 1 Tree with different max chrom count:
+
+Will run special params to GenusXXX_Chromevol_special DIR.
+
+Params can be changed in .pm file such as $maxChrNum in line 250
