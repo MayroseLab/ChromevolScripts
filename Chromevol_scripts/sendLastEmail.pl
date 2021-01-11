@@ -27,7 +27,12 @@ my $message .= "Hello,\n\n";
 #if (-e $final_pass_file)
 if ($JobStatus eq "PASS")
 {
-	$subject = "Your ChromEvol results of run $id are ready";
+	if ($jobTitle eq "daily%20test") {
+		$subject = "Your ChromEvol daily test results are ready";
+	}
+	else {
+		$subject = "Your ChromEvol results of run $id are ready";
+	}
 	$message .= "$subject at:\n";
 	$message .= "Your job was completed successfully\n";
 } else {
