@@ -17,5 +17,3 @@ if __name__ == '__main__':
             second_run(parameters, user_output_dir, counts_file, user_output_dir + tree_wo_counts)
     run_simulations(results_file, model_adequacy_out_dir, original_counts, user_output_dir + tree_wo_counts, user_output_dir + root_freq_filename, parameters, user_output_dir)
     model_adequacy(model_adequacy_out_dir, original_counts_statistics, user_output_dir, original_counts_statistics)
-    path = os.path.dirname(os.path.realpath(__file__))
-    os.system("Rscript " + path + "/create_plots_for_web.R " + user_output_dir)

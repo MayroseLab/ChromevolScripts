@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import time
+import datetime
 import re
 from ete3 import Tree
 from Bio import Phylo
@@ -26,6 +27,7 @@ CCDB_DATABASE = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/CCDB_1.46.db'
 NCBI_DB_DATABASE = '/groups/itay_mayrose/share/ploidb/ploidb_DBs/GenbankDB_grp_Sep19.db'
 CHROMEVOL_CODE_PATH = '/bioseq/chromEvol/Chromevol_scripts/'
 CHROMEVOL_EXE_PATH = '/bioseq/chromEvol'
+DAILY_TESTS_PATH = '/bioseq/bioSequence_scripts_and_constants/daily_tests'
 
 PARAMS_PATH = '/bioseq/chromEvol/power_PARAM_templates'
 DEBUG_FLAG=1
@@ -156,7 +158,15 @@ def send_end_email(param_dict,working_dir,status_str):
 	JobID = os.path.basename(os.path.normpath(working_dir))
 	email_addr = param_dict['inputEmail']
 	jobTitle = param_dict['jobTitle'].replace(" ", "%20")
-	os.system('perl %ssendLastEmail.pl --toEmail %s --id %s --JobStatus %s --jobTitle "%s"' %(CHROMEVOL_CODE_PATH,email_addr,JobID,status_str, jobTitle))
+	if jobTitle != "daily%20test":
+		os.system('perl %ssendLastEmail.pl --toEmail %s --id %s --JobStatus %s --jobTitle "%s"' %(CHROMEVOL_CODE_PATH,email_addr,JobID,status_str, jobTitle))
+	else:
+		date = datetime.datetime.today().strftime('%d%m%Y')
+		with open(os.path.join(DAILY_TESTS_PATH, f'chromEvol_{date}.txt'), "w") as f:
+			resultsLink = f'http://ChromEvol.tau.ac.il/results.html?jobId={JobID}&jobTitle={jobTitle}'
+			f.write(f'{status_str},{resultsLink}')
+		f.close()	
+		
 	return
 
 #----------------------------------------------------------------------------------------------------------#
@@ -355,9 +365,11 @@ def return_MA_vecData(vec_file):
 	#Adeq_stats_names_VecLocation = {'Variance':0 ,'Entropy':1,'Parsimony':4,'Time_parsimony':5}
 	vec_data = dict()
 	with open(vec_file,'r') as vec_f:
-		for line in vec_f:
-			line_data = line.strip().replace('[','').replace(']','') # [1, 1, 1, 1, 1, 0]
-			vec_data = line_data.split(',')
+		# commented out by Josef
+		#for line in vec_f: 
+		#	line_data = line.strip().replace('[','').replace(']','') # [1, 1, 1, 1, 1, 0]
+		#	vec_data = line_data.split(',')
+		vec_data = vec_f.readlines()
 
 	#Add summary value:
 	count_in_range = 0
@@ -474,6 +486,16 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 
 	#Sort models list according to AIC values list:
 	model_list_sort =  list({k: v for k, v in sorted(AIC_per_model_dict.items(), key=lambda item: item[1])}.keys())
+    
+    # Josef: fix sort in case of user selected model
+	print_to_log("model_adq_list.len = %d" %len(model_adq_list), working_dir + '/Log.txt')
+	if len(model_adq_list) == 1: 
+		pos = model_list_sort.index(model_adq_list[0])
+		print_to_log("pos = %d" %pos, working_dir + '/Log.txt')
+		if pos != 0: 
+			model_swap = model_list_sort[0]
+			model_list_sort[0] = model_list_sort[pos]
+			model_list_sort[pos] = model_swap
 
 	#Write models in file according to AIC order:
 	with open(working_dir + '/selected_models.txt','w') as f_models:
@@ -526,7 +548,8 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 			if model_name in model_adq_list:
 				out_f2.write('"%s",' % model_name)
 				#vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/adequacy_test/adequacy_vec'
-				vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/true_percentiles'
+				#vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/true_percentiles'
+				vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/PVs' # Josef
 				model_VecData = return_MA_vecData(vec_file)
 				dict_ma_for_models[model_name] = model_VecData
 		out_f2.write('\n')
@@ -539,14 +562,14 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 					c_spc = ' '
 					out_f2.write('"%-15s ",' % c_spc)
 			out_f2.write('\n')
-		#Statistics line:
-		out_f2.write('"Statistics distributions",')
-		for model in model_list_sort:
-			if model in model_adq_list:
-				out_f2.write('"DistLink",')
-			else:
-				out_f2.write('"",')
-		out_f2.write('\n')
+		#Statistics line: commented out by Josef
+		#out_f2.write('"Statistics distributions",')
+		#for model in model_list_sort:
+		#	if model in model_adq_list:
+		#		out_f2.write('"DistLink",')
+		#	else:
+		#		out_f2.write('"",')
+		#out_f2.write('\n')
 
 	return
 
@@ -1564,7 +1587,8 @@ try:
 	results_lists = []
 	param_dict,MA_param_list,Rerun_flag,flag_mismatch, spc_no_counts, spc_missing_onTree = read_pip_control(working_dir,pip_control)
 	#Prepare email notifications cmds:
-	send_start_email(param_dict,working_dir)
+	if param_dict['jobTitle'] != 'daily test':
+		send_start_email(param_dict,working_dir)
 
 	Log_f = working_dir + '/Log.txt'
 	#Set ploidy and model adeq params:
