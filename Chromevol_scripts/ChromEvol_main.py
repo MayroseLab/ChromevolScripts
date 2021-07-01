@@ -1876,7 +1876,7 @@ try:
 				input_tree_post = tree_dir + '/' + model_name + '/posteriorAncestors.tree'
 				counts_path = working_dir + '/countsFile_edit'
 				convert_to_PhyD3(input_tree_ml, counts_path, 'None')
-				convert_to_PhyD3(input_tree_post, counts_path, 'None')
+				#convert_to_PhyD3(input_tree_post, counts_path, 'None')
 
 		with open(working_dir + '/Status.txt', 'w') as stats_f:
 			stats_f.write("Running Chromevol")
