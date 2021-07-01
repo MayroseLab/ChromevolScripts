@@ -1,4 +1,4 @@
-#from Bio import Phylo
+#module load python/python-anaconda3.6.5-michaldrori
 import random
 import os
 import sys
@@ -6,6 +6,7 @@ import shutil
 import time
 import datetime
 import re
+import json
 from ete3 import Tree
 from Bio import Phylo
 from ChromEvol_defs import *
@@ -204,7 +205,65 @@ def get_newick_branch_labels(newick_tree_file):
 
 	return branch_length_label_dict
 
+	#----------------------------------------------------------------------------------------------------------#
+def validate_tree(tree_path): 
+	
+	# add semcolon in end of file if missing
+	with open(tree_path,"r") as f: 
+		content = f.read();
+		content = content.rstrip();
+	f.close()
+	if not content.endswith(';'):
+		content += ';';
+		with open(tree_path,"w") as f: 
+			f.write(content);
+		f.close()
+			
+	# check if => 5 leaves
+	tree = Phylo.read(tree_path, "newick")
+	if len(tree.get_terminals()) < 5: 
+		return "Error in format of tree file."
+	else: 
+		return "OK"
 
+def validate_counts(counts_path): 
+	spc_in_couns_list=[]
+	flag_name = 0
+	
+	float_pat = '([0-9]*[.])?[0-9]+'  
+	int_pat = '[1-9][0-9]*' 
+	re_str = f'{int_pat}={float_pat}'
+	is_distribute = False
+	
+	with open(counts_path,'r') as counts_f:
+		for line in counts_f:
+			if not line.strip():  continue   #To skip empty lines
+			if '>' in line and flag_name == 0:
+				flag_name = 1
+				spc_name = line.strip().replace('>','')
+				if len(spc_name) == 0:
+					return "Error in format of counts file.", is_distribute
+				spc_in_couns_list.append(spc_name)
+			else:
+				line = line.strip()
+				flag_name=0
+				if line.isdigit() or 'x' in line or 'X' in line:
+					continue
+				else:
+					patterns = line.split('_')
+					for p in patterns:
+						if not re.match(re_str,p): 
+							return "Error in format of counts file.", is_distribute
+					is_distribute = True
+				
+	counts_f.close()
+	
+	#In case this Genus has less than 5 counts:
+	if len(spc_in_couns_list) < 5:
+		return "Error in format of counts file: This genus has less than 5 counts.", is_distribute
+		
+	return "OK", is_distribute
+	
 #----------------------------------------------------------------------------------------------------------#
 def get_ploidy(ploidy_path):
 
@@ -405,7 +464,7 @@ def changeModelName(str):
 		return " DysBnumDup"
 
 
-def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_dict):
+def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_dict, param_dict):
 
 	select_model_file = '/Chromevol_selected_models.txt'
 	chrom_res = 'chromEvol.res'
@@ -447,9 +506,9 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 							chrom_num_type = line_splt[0] + ' chromosome in data'
 						chrom_num_dict[chrom_num_type] = line_splt[-1].strip()
 
-					for param_id in param_keys:
+					for param_id in param_keys: 
 						#print_to_log("results: line 306 - param_id %s" % param_id, results_dir + '/Log.txt')
-						if param_id in line:
+						if param_id in line and line[0] != '#': # JS - added to ignore header lines
 							if param_id == 'BASE_NUMBER' and 'BASE_NUMBER_R' not in line:
 								gain_loss_dict[param_id] = int(line.strip().split('\t')[1])
 								if (gain_loss_dict[param_id] == 0.0):
@@ -467,20 +526,6 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 
 	counts_data_f = open(results_dir+'/chrom_counts_data.txt','w')
 	print_to_log("results: line 329 model %s - " % (results_dir+'/chrom_counts_data.txt'), results_dir + '/Log.txt')
-	#data_range=''
-	#allowed_range=''
-	#for count_param in chrom_num_dict.keys():
-	#	print_to_log("results: line 333 count_param %s - " % count_param,results_dir + '/Log.txt')
-#
-	#	if count_param == 'min chromosome in data':
-	#		data_range += '%s-'%chrom_num_dict[count_param]
-	#	elif count_param == 'max chromosome in data':
-	#		data_range += '%s' % chrom_num_dict[count_param]
-	#	if count_param == 'min chromosome allowed':
-	#		allowed_range += '%s-'%chrom_num_dict[count_param]
-	#	elif count_param == 'max chromosome allowed':
-	#		allowed_range += '%s' % chrom_num_dict[count_param]
-	#counts_data_f.write(" Chromosome in data range: %s , Chromosome allowed range: %s"%(data_range,allowed_range))
 	counts_data_f.write(" Chromosome in data range: TEMP , Chromosome allowed range: TEMP")
 	counts_data_f.close()
 
@@ -501,9 +546,12 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 	with open(working_dir + '/selected_models.txt','w') as f_models:
 		comma = ''
 		for model_name in model_list_sort:
-			f_models.write(comma+convertToNewModelNames(model_name)) # josef
+			#f_models.write(comma+convertToNewModelNames(model_name)) # josef
+			f_models.write(comma+model_name)
 			comma = ','
 	f_models.close()
+	#path = working_dir + '/selected_models.txt';
+	#write_defined_models_list(path, model_list_sort, param_dict)
 
 	out_f.write('"Header1",')
 	if model_adq_list: out_f2.write('"Header1",')
@@ -562,17 +610,65 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 					c_spc = ' '
 					out_f2.write('"%-15s ",' % c_spc)
 			out_f2.write('\n')
-		#Statistics line: commented out by Josef
-		#out_f2.write('"Statistics distributions",')
-		#for model in model_list_sort:
-		#	if model in model_adq_list:
-		#		out_f2.write('"DistLink",')
-		#	else:
-		#		out_f2.write('"",')
-		#out_f2.write('\n')
 
 	return
+	
+#----------------------------------------------------------------------------------------------------------#
+def Create_MA_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_dict, param_dict):
 
+	if model_adq_list:
+		out_f2 = open(results_dir + '/MA_RESULT_PRINTOUT.csv', 'w')
+
+	#Sort models list according to AIC values list:
+	model_list_sort =  list({k: v for k, v in sorted(AIC_per_model_dict.items(), key=lambda item: item[1])}.keys())
+    
+    # Josef: fix sort in case of user selected model
+	print_to_log("model_adq_list.len = %d" %len(model_adq_list), working_dir + '/Log.txt')
+	if len(model_adq_list) == 1: 
+		pos = model_list_sort.index(model_adq_list[0])
+		print_to_log("pos = %d" %pos, working_dir + '/Log.txt')
+		if pos != 0: 
+			model_swap = model_list_sort[0]
+			model_list_sort[0] = model_list_sort[pos]
+			model_list_sort[pos] = model_swap
+
+	
+	if model_adq_list: out_f2.write('"Header1",')
+	idx = 2
+	for model_name in model_list_sort:
+		if model_adq_list:
+			if model_name in model_adq_list:
+				out_f2.write('"Header%d",' % idx)
+		idx += 1
+	if model_adq_list: out_f2.write('\n')
+
+	#Print the model selection results and Model Adequacy:
+	Adeq_stats_names_VecLocation = {'Variance':0 ,'Entropy':1,'Parsimony':2,'Parsimony vs. time':3}
+
+	if model_adq_list: out_f2.write('"",')
+	dict_ma_for_models=dict()
+	if model_adq_list:
+		for model_name in model_list_sort:
+			if model_name in model_adq_list:
+				out_f2.write('"%s",' % model_name)
+				#vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/adequacy_test/adequacy_vec'
+				#vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/true_percentiles'
+				vec_file = working_dir + '/ChromEvol_Tree_1/' + model_name + '/PVs' # Josef
+				model_VecData = return_MA_vecData(vec_file)
+				dict_ma_for_models[model_name] = model_VecData
+		out_f2.write('\n')
+		for MA_param in Adeq_stats_names_VecLocation.keys():
+			out_f2.write('"%-25s",' % MA_param)
+			for model in model_list_sort:
+				if model in model_adq_list:
+					out_f2.write('"%-15s",' % dict_ma_for_models[model][Adeq_stats_names_VecLocation[MA_param]])
+				else:
+					c_spc = ' '
+					out_f2.write('"%-15s ",' % c_spc)
+			out_f2.write('\n')
+
+	return
+	
 #----------------------------------------------------------------------------------------------------------#
 def read_job_id(f_job_num):
 
@@ -1003,7 +1099,7 @@ def send_SIM_job_cmd(cmd,job_dir,Tree_NUM,queue_name):
 		job_sim_f.write("#PBS -v PBS_O_SHELL=bash,PBS_ENVIRONMENT=PBS_BATCH\n")
 		job_sim_f.write("#PBS -e %s\n" %job_dir)
 		job_sim_f.write("#PBS -o %s\n" %job_dir)
-		job_sim_f.write("module load python/anaconda3-5.0.0\n")
+		job_sim_f.write("module load python/python-anaconda3.6.5-michaldrori\n")
 		job_sim_f.write("%s\n" %cmd)
 
 	job_sim_f.close()
@@ -1158,7 +1254,8 @@ def find_MinMax(working_dir,counts_file,lower_bound):
 	key_list_toRemove=[]
 	#remove counts lower than lower_bound:
 	for key in counts_dict.keys():
-		if counts_dict[key] == 'x':
+		#if counts_dict[key] == 'x':
+		if type(counts_dict[key]) is not int:
 			continue
 		elif int(counts_dict[key]) < lower_bound:
 			key_list_toRemove.append(key)
@@ -1167,7 +1264,8 @@ def find_MinMax(working_dir,counts_file,lower_bound):
 			if key == key_rem:
 				del counts_dict[key]
 				break
-	no_x_counts_list = {v: v for k, v in counts_dict.items() if v is not 'x'}
+	#no_x_counts_list = {v: v for k, v in counts_dict.items() if v is not 'x'}
+	no_x_counts_list = {v: v for k, v in counts_dict.items() if type(v) is int}
 	minInData = int(min(no_x_counts_list))
 	maxInData = int(max(no_x_counts_list))
 
@@ -1210,22 +1308,24 @@ def init_param_dict():
 	return param_dict
 
 #----------------------------------------------------------------------------------------------------------#
-def read_pip_control(working_dir,pip_file): #read_input
+def read_parameters(working_dir, param_file):
 
 	# Set dictionary with default values:
 	param_dict = init_param_dict()
 
-	param_list = ['_dataFile', '_treesFile', '_topologyNum', '_simNum', '_runModels', '_plot', '_ploidyModelsOnly',
+	# rm  '_runModels',
+	param_list = ['_dataFile', '_treesFile', '_topologyNum', '_simNum', '_plot', '_ploidyModelsOnly',
 				  '_ploidyCallType', '_paramTemplates', '_outDir', '_name', '_logFile', '_fixRoot', '_excludeModels',
-				  '_cpusNum', '_chromevolExe', '_baseNumber', '_baseNum']
+				  '_cpusNum', '_chromevolExe', '_baseNumber', '_baseNum', 'definedModels']
 
 	# Check for Model Adequacy parameters in params.txt file
 	MA_ParamList = []
 	rerun_flag = 'RegRen'
-	with open(working_dir + '/params.txt', 'r') as params_f:
+	#with open(working_dir + '/params.txt', 'r') as params_f:
+	with open(param_file, 'r') as params_f:
 		for line in params_f:
-			param_name = line.strip().split(':')[0]
-			param_val = line.strip().split(':')[1]
+			param_name = line.strip().split(':',1 )[0]
+			param_val = line.strip().split(':',1 )[1]
 			param_dict[param_name] = param_val
 			if 'Origin' in line:
 				rerun_flag = 'Rerun'
@@ -1239,29 +1339,17 @@ def read_pip_control(working_dir,pip_file): #read_input
 		shutil.copyfile(param_dict['OriginJobDir'] + '/selected_models.txt', working_dir + '/selected_models.txt')
 		shutil.copyfile(param_dict['OriginJobDir'] + '/taxa_input_report.txt', working_dir + '/taxa_input_report.txt')
 
-	with open(pip_file, 'r') as pip_f:
-		for line in pip_f:
-			for param_name in param_list:
-				check_and_add_param(line, param_name, param_dict)
+	# add parameters from pip file to param_dict
+	#with open(pip_file, 'r') as pip_f:
+	#	for line in pip_f:
+	#		for param_name in param_list:
+	#			check_and_add_param(line, param_name, param_dict)
 
-	# Edit counts file:
-	tree_for_counts = open(working_dir + '/counts_Tree', 'w')
-	with open(param_dict['_treesFile'], 'r') as trees_f:
-		for line in trees_f:
-			if line.strip():
-				tree_for_counts.write(line.strip())
-				break
-		tree_for_counts.close()
+	return param_dict,MA_ParamList,rerun_flag  
+	
+#----------------------------------------------------------------------------------------------------------#
+def assign_chromEvol_parameters(param_dict): 
 
-	# edit_counts_file will also check for indiscrepancies between the counts and tree file the user entered.
-	# In case of a mismatch we produce the corresponding not to the user to enable correction:
-	JobID = os.path.basename(os.path.normpath(working_dir))
-	flag_mismatch, spc_no_counts, spc_missing_onTree = edit_counts_file(working_dir,
-																		working_dir + '/counts_Tree',
-																		working_dir + '/countsFile',
-																		working_dir + '/countsFile_edit', JobID)
-
-	# if param_dict['_baseNumber'] == -999:  #User didn't give it as an input
 	param_dict['_dataFile'] = param_dict['_dataFile'] + '_edit'
 	Min_in_val, Max_in_val, MaxChrom = find_MinMax(working_dir, param_dict['_dataFile'], 4)
 	if param_dict['_fixRoot'] == 0:
@@ -1270,20 +1358,14 @@ def read_pip_control(working_dir,pip_file): #read_input
 		param_dict['_maxChrNum'] = -10
 	else:
 		param_dict['_maxChrNum'] = param_dict['_fixRoot'] + 1
-	# ?????????????????????????????? Check with Lior/Itay
-	# param_dict['_maxChrNum'] = -10  #1+(2*Max_in_val)
+
 	param_dict['_minChrNum'] = -1
 	param_dict['_baseNumber'] = Min_in_val
 	if param_dict['_baseNumber'] != 0:
 		param_dict['_bOptBaseNumber'] = 1
 	param_dict['Min_in_val'] = Min_in_val
 	param_dict['Max_in_val'] = Max_in_val
-
-	for param in param_dict.keys():
-		line_to_print = ('%s:%s' % (param, param_dict[param]))
-		print_to_log(line_to_print, working_dir + '/Log.txt')
-
-	return param_dict,MA_ParamList,rerun_flag,flag_mismatch, spc_no_counts, spc_missing_onTree
+	
 #----------------------------------------------------------------------------------------------------------#
 def turn_list_to_DB_list(list_name):
 
@@ -1346,8 +1428,7 @@ def search_spc_in_NCBI(taxa_list,working_dir,rep_f):
 	return spc_with_seqData
 
 #----------------------------------------------------------------------------------------------------------#
-def edit_counts_file(working_dir,chosenTree, countsFile, outCounts, jobId):
-
+def edit_counts_file(working_dir,chosenTree, countsFile, outCounts, jobId, assignMissingData=False):
 	#Need to check 4 cases:
 	#1. Species missing in counts file -> turn to X data
 	#2. Species missing in the tree file -> remove from counts file
@@ -1370,11 +1451,10 @@ def edit_counts_file(working_dir,chosenTree, countsFile, outCounts, jobId):
 				countsEdit_f.write('%s\n' % str(counts_dict[spc_name]))
 				species_with_counts.append(spc_name)
 			else:
-				#countsEdit_f.write('>%s\n' % spc_name)
-				#countsEdit_f.write('x\n')
+				if assignMissingData: 
+					countsEdit_f.write('>%s\n' % spc_name)
+					countsEdit_f.write('x\n')
 				species_without_counts.append(spc_name.replace('_',' '))
-
-
 
 	shutil.copyfile(countsFile,working_dir+'/counts_origin')
 	shutil.copyfile(outCounts,countsFile)
@@ -1383,16 +1463,20 @@ def edit_counts_file(working_dir,chosenTree, countsFile, outCounts, jobId):
 		spc_found_ccdb = search_counts_in_CCDB(species_without_counts, working_dir)
 		f_inputs_taxa_report.write("The following species were found in your phylogeny but are missing in "
 		"your counts file:<br>\n %s<br>\n" %(', '.join(map(str, species_without_counts))))
-		f_inputs_taxa_report.write("<a href=\"chromEvol_results/" + jobId + "/RemoveSpc.txt\" target=\"_blank\">[Missing Spc],</a>")
+		#f_inputs_taxa_report.write("<a href=\"chromEvol_results/" + jobId + "/RemoveSpc.txt\" target=\"_blank\">[Missing Spc],</a>")
 		if spc_found_ccdb:
-			f_inputs_taxa_report.write('Note that the following speices have counts data in '
+			f_inputs_taxa_report.write('Note that the following species have counts data in '
 			'<a href="http://ccdb.tau.ac.il/" target="_blank"> CCDB:</a><br>\n %s<br>\n' %
 			(', '.join(map(str, spc_found_ccdb))))
 		flag_at_least_one = 1
+		if assignMissingData: 
+			f_inputs_taxa_report.write('Assigning missing taxa as x.\n')
+		else: 
+			f_inputs_taxa_report.write('Removing tips with no counts data.\n')
 		with open(working_dir + '/Status.txt', 'w') as stats_f:
 			stats_f.write("We found a mismatch between your phylogeny and counts file, see detailes below.")
 
-	#Check if speices in counts file are missing from phylogeny:
+	#Check if species in counts file are missing from phylogeny:
 	spc_missing_from_phylogeny=list(set(spc_list_in_counts)-set(spc_list_on_tree))
 	if spc_missing_from_phylogeny:
 		f_inputs_taxa_report.write("The following species were found in your counts file but are missing in "
@@ -1450,29 +1534,53 @@ def choose_random_trees(working_dir,treesFile, selected_TreeNum):
 					 working_dir + '/Log.txt')
 
 	return dirs_list,dirs_tree_dict
-#----------------------------------------------------------------------------------------------------------#
-def edit_param_file(working_dir,tree_dir,dirs_tree_dict,model_name,param_dict):
+
+def edit_param_file(working_dir,tree_dir,dirs_tree_dict,model_name,model_dict,param_dict):
 	#for model_item in params_list:
 	param_local_dir = tree_dir #+ '/' + model_name
 	param_local_file = param_local_dir + '/param_' + model_name + '.txt'
 	if not os.path.exists(param_local_dir): os.makedirs(param_local_dir)
-	shutil.copyfile(PARAMS_PATH + '/param_' + model_name, param_local_file)
+	shutil.copyfile(PARAMS_PATH + '/param_NEW_MODELS', param_local_file)
 	new_data = ''
 	with open(param_local_file, 'r') as param_file:
 		for line in param_file:
-			new_line = line.replace('<OUT_DIR>', param_local_dir)
+			new_line = line.replace('<OUT_DIR>', f'{param_local_dir}/{model_name}')
 			new_line = new_line.replace('<CNT_FILE>', param_dict['_dataFile'])
 			new_line = new_line.replace('<TREE_FILE>', dirs_tree_dict[tree_dir])
 			new_line = new_line.replace('<MAX_CHR_NUM>', str(param_dict['_maxChrNum']))  # str(max_chrom_num))
 			new_line = new_line.replace('<MIN_CHR_NUM>', str(param_dict['_minChrNum']))
-			new_line = new_line.replace('<BASE_NUM>', str(param_dict['_baseNumber']))
-			new_line = new_line.replace('<OPT_BASE_NUM>', str(param_dict['_bOptBaseNumber']))
+			#new_line = new_line.replace('<BASE_NUM>', str(param_dict['_baseNumber']))
+			#new_line = new_line.replace('<OPT_BASE_NUM>', str(param_dict['_bOptBaseNumber']))
+			if model_dict['_baseNumberR'] == 1: 
+				logVal = 10
+			else: 
+				logVal = 6
+			new_line = new_line.replace('<LOG_VAL>', str(logVal))
 			new_data += (new_line)
+			
 	with open(param_local_file, 'w') as param_file:
 		param_file.write(new_data)
+		for key, value in model_dict.items():
+			if value != 0 and key != 'name':
+				if key == '_gainConstR' or key == '_lossConstR':
+					value = '1'
+				param_file.write(f'{key} {value}\n')
 
+		# add lines for _baseNumber, _bOptBaseNumber, _minBaseTransition according to model
+		if model_dict['_baseNumberR'] == 1:
+			param_file.write(f'_baseNumber {param_dict["_baseNumber"]}\n')
+			if param_dict['_baseNumber'] != 0:
+				param_file.write(f'_bOptBaseNumber {param_dict["_bOptBaseNumber"]}\n')
+			param_file.write('_minBaseTransition 0\n')
+		if model_dict['_gainConstR'] == 0.5:
+			param_file.write(f'_gainLinearR 0.5\n')
+		if model_dict['_lossConstR'] == 0.5:
+			param_file.write(f'_lossLinearR 0.5\n')
+			
+	param_file.close()
+	
 	return param_local_file
-
+	
 # ----------------------------------------------------------------------------------------------------------#
 def get_spc_in_counts(working_dir,countsFile):
 
@@ -1489,13 +1597,17 @@ def get_spc_in_counts(working_dir,countsFile):
 				spc_name = line.strip().replace('>','')
 				spc_in_couns_list.append(spc_name)
 			else:
-				if 'x' in line.strip() or 'X' in line.strip():
-					counts_dict[spc_name] = line.strip().replace('X','x')
-					counts_dict_all[spc_name] = line.strip().replace('X','x')
+				line = line.strip()
+				if 'x' in line or 'X' in line:
+					counts_dict[spc_name] = line.replace('X','x')
+					counts_dict_all[spc_name] = line.replace('X','x')
 					none=1
+				elif line.isdigit():
+					counts_dict[spc_name]=int(line)
+					counts_dict_all[spc_name]=int(line)
 				else:
-					counts_dict[spc_name]=int(line.strip())
-					counts_dict_all[spc_name]=int(line.strip())
+					counts_dict[spc_name]=line
+					counts_dict_all[spc_name]=line
 				flag_name=0
 
 		#In case this Genus has less than 5 counts:
@@ -1514,21 +1626,27 @@ def get_spc_in_counts(working_dir,countsFile):
 	return spc_in_couns_list,counts_dict,counts_dict_all
 
 # ----------------------------------------------------------------------------------------------------------#
+
 def creat_models_and_params(working_dir,tree_dir,dirs_tree_dict,models_list,param_dict,queue_name):
 
+	data = json.loads(param_dict['definedModels'])
+	
 	result_files=[]
 	for model in models_list:
 		model_dir = tree_dir + '/' + model
 		print_to_log("Create model dir: %s" % model_dir, working_dir + '/Log.txt')
 		create_dir_if_not_exists(model_dir,working_dir)
-		param_file = edit_param_file(working_dir,tree_dir,dirs_tree_dict,model,param_dict)
+		
+		model_i = getIndexByModel(data, model); #int(re.search(r'\d{0,3}$', model).group())
+		param_file = edit_param_file(working_dir,tree_dir,dirs_tree_dict,model,data[model_i],param_dict)
+		
 		#Run Chromevol:
 		cmd = '%s %s > %s/chrom_out.txt' % (param_dict['_chromevolExe'], param_file,model_dir)
 		tree_model = model
 		job_id = send_job_cmd(cmd, model_dir, tree_model,queue_name)
 		print_to_log(job_id,working_dir + '/Log.txt')
 		#print(cmd)
-		#os.system(cmd)
+		os.system(cmd)
 		result_files.append(tree_dir + '/' + model + '/chromEvol.res')
 
 	return result_files
@@ -1546,7 +1664,23 @@ def convertToNewModelNames(oldName): # josef
         return "DysBnum";
     if oldName=="BASE_NUM_DUPL":
         return "DysBnumDup";
-   
+
+def write_defined_models_list(path, model_list, param_dict):
+	data = json.loads(param_dict['definedModels'])
+
+	with open(path,'w') as f_models:
+		nl = ''
+		for model in model_list:
+			f_models.write(f'{nl}{model}:')
+			model_i = getIndexByModel(data, model);
+			comma = ''
+			for key, value in data[model_i].items():
+				if value != 0 and key != 'name': 
+					f_models.write(f'{comma}{key}={value}')
+					comma = ','
+			nl = '\n'
+	f_models.close()
+
 # ----------------------------------------------------------------------------------------------------------#
 # ----------------------------------------------------------------------------------------------------------#
 #
@@ -1558,15 +1692,11 @@ def convertToNewModelNames(oldName): # josef
 # ----------------------------------------------------------------------------------------------------------#
 
 
-#working_dir = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/SERVER_chromEvol/' #HEAD Directory / Job Dir
 Log_dir = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/SERVER_chromEvol/' #HEAD Directory / Job Dir
 
-#pip_control = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/SERVER_chromEvol/PIP_control'
-#selected_models = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/SERVER_chromEvol/selected_models.txt'
-
-
 working_dir = sys.argv[1]
-pip_control = sys.argv[2]
+#pip_control = sys.argv[2]
+param_file = sys.argv[2]
 queue_name = "lifesciweb"
 selected_TreeNum = TREES_NUM #int(sys.argv[3]) #5  #number of trees to run on
 
@@ -1574,34 +1704,114 @@ try:
 	#working_dir = working_dir + run_num
 	create_dir_if_not_exists(working_dir,working_dir)
 
+	Log_f = working_dir + '/Log.txt'
+	print_to_log("Starting ChromEvol_main\n" ,Log_f)
+	
+	Error_f = working_dir + '/Error.txt'
+	
 	#Check if chromevol results exists to skip to model adequacy stage:
-	results_flag = 0
-	for dirs in glob(working_dir):
-		list_dirs = glob(working_dir + '/*/')
-		for sub_dir in list_dirs:
-			if 'ChromEvol_Tree' in sub_dir:
-				#check if result file in place:
-				if os.path.exists(sub_dir + 'result_sum.csv'):
-					results_flag+=1
+	# JS remove this code
+	#results_flag = 0
+	#for dirs in glob(working_dir):
+	#	list_dirs = glob(working_dir + '/*/')
+	#	for sub_dir in list_dirs:
+	#		if 'ChromEvol_Tree' in sub_dir:
+	#			#check if result file in place:
+	#			if os.path.exists(sub_dir + 'result_sum.csv'):
+	#				results_flag+=1
+	
+	# ----------------------------------------------------------------------------------------------------------#
+	# ---------------------------------       Input Stage         ----------------------------------------------#
+	# ----------------------------------------------------------------------------------------------------------#
+	
+	with open(working_dir+'/Status.txt','w') as stats_f:
+		stats_f.write("Validating Input")
+	stats_f.close()
+	
+	#Read parameters into param_dict, MA_param_list
+	print_to_log("calling read_parameters\n" ,Log_f)
+	param_dict,MA_param_list,Rerun_flag = read_parameters(working_dir,param_file)
+	
+	#validate format of tree and counts files
+	status = validate_tree(param_dict['_treesFile']);
+	if status != "OK":
+		fail (status, 'validation', Error_f);
+		
+	status, is_distribute = validate_counts(param_dict['_dataFile']);
+	if status != "OK":
+		fail (status, 'validation', Error_f);
+		
+	if (Rerun_flag != 'Rerun'):
+	
+		# copy tree file to 'counts_Tree'
+		tree_for_counts = open(working_dir + '/counts_Tree','w')
+		with open(param_dict['_treesFile'], 'r') as trees_f:
+			for line in trees_f:
+				if line.strip():
+					tree_for_counts.write(line.strip())
+					break
+			tree_for_counts.close()
 
-	results_lists = []
-	param_dict,MA_param_list,Rerun_flag,flag_mismatch, spc_no_counts, spc_missing_onTree = read_pip_control(working_dir,pip_control)
-	#Prepare email notifications cmds:
+		# check for indiscrepancies between the counts and tree file and fix counts file
+		# In case of a mismatch we produce the corresponding to the user to enable correction:
+		JobID = os.path.basename(os.path.normpath(working_dir))
+		print_to_log("calling edit_counts_file\n" ,Log_f)
+		flag_mismatch, spc_no_counts, spc_missing_onTree =  edit_counts_file(working_dir,working_dir + '/counts_Tree', working_dir + '/countsFile', working_dir + '/countsFile_edit', JobID, assignMissingData = param_dict['PruneCounts'] == 'Xcounts')
+		
+		# write missing species into file 'RemoveSpc.txt'
+		remove_spc_f = working_dir + '/RemoveSpc.txt'
+		with open(remove_spc_f,'w') as rem_spc_f:
+			for taxa in spc_no_counts:
+				rem_spc_f.write(taxa.replace(' ','_') + '\n')
+
+		#In case of PruneTree option: remove leafs from tree that are not in counts file
+		if (param_dict['PruneCounts'] == 'PruneTree') and os.stat(remove_spc_f).st_size != 0:
+			Rcmd_pruneTree = ("R CMD BATCH '--args working_dir=" + '"' + working_dir + '"' +
+								 " trees_file=" + '"' + working_dir +'/TreesFile.txt' + '"' + " remove_species_list=" + '"' + remove_spc_f + '"' +
+								 " outfile=" + '"' +working_dir +'/TreesFile_R.txt' + '"' + "' " + CHROMEVOL_CODE_PATH + "prune.trees.R")
+			print_to_log(Rcmd_pruneTree,Log_f)
+			stats_r = os.system(Rcmd_pruneTree)
+			if stats_r != 0:
+				print_to_log("Prune R status is %s" % stats_r, Log_f)
+				error = f'Prune R status is {stats_r}'
+				fail (error, "runtime", Error_f)
+			else:
+				shutil.copyfile(working_dir +'/TreesFile.txt',working_dir +'/TreesFile_Origin.txt')
+				shutil.copyfile(working_dir +'/TreesFile_R.txt',working_dir +'/TreesFile.txt')
+					
+	#finish assigning chromEvol run parameters to param_dict
+	assign_chromEvol_parameters(param_dict)
+	
+	#write param_dict to log file
+	for param in param_dict.keys():
+		line_to_print = ('%s:%s' % (param, param_dict[param]))
+		print_to_log(line_to_print, Log_f)
+		
+	#send start running email
+	print_to_log("send start email\n" ,Log_f)
 	if param_dict['jobTitle'] != 'daily test':
 		send_start_email(param_dict,working_dir)
 
-	Log_f = working_dir + '/Log.txt'
 	#Set ploidy and model adeq params:
 	if 'ploidy_ON' not in param_dict.keys():
 		ploidy_flag = 'OFF'
-	elif (param_dict['ploidy_ON'] == 'On'):
+	elif param_dict['ploidy_ON'] == 'On':
 		ploidy_flag = 'ON'
 	else:
 		ploidy_flag = 'OFF'
-	if (param_dict['AdeqTest'] == 'YES'):
+	if param_dict['AdeqTest'] == 'YES':
 		model_adq_flag = 'ON'
 	else:
 		model_adq_flag = 'OFF'
+	
+	# turn off model adequacy and ploidy if counts file is in distribution format
+	if is_distribute and (ploidy_flag == 'ON' or model_adq_flag == 'ON'):
+		ploidy_flag = 'OFF'
+		model_adq_flag = 'OFF'
+		f_inputs_taxa_report = open(working_dir+'/taxa_input_report.txt','w')
+		f_inputs_taxa_report.write("Counts file contains distribution format, turning off model adquacy and ploidy options.")
+		f_inputs_taxa_report.close()
+		
 	print_to_log("Ploidy:%s,Adequacy:%s\n"%(ploidy_flag,model_adq_flag),working_dir + '/Log.txt')
 	with open(working_dir+'/ma_ploidy_flags.txt','w') as ma_ploidy_f:
 		ma_ploidy_f.write('%s,%s,'%(ploidy_flag,model_adq_flag))
@@ -1614,9 +1824,8 @@ try:
 			stats_f.write("Rerun job %s"%param_dict['OriginJobID'])
 		copy_dir_to_another_dir(param_dict['OriginJobDir'] +'/ChromEvol_Tree_1', working_dir, Log_f)
 
-
 	# ----------------------------------------------------------------------------------------------------------#
-	# ---------------------------------       Checking the input files         ---------------------------------#
+	# ---------------------------------       Running Stage         --------------------------------------------#
 	# ----------------------------------------------------------------------------------------------------------#
 	if (Rerun_flag != 'Rerun'):
 		with open(working_dir + '/Status.txt', 'w') as stats_f:
@@ -1624,51 +1833,20 @@ try:
 
 	BestModels_perTree_dict = dict()
 	bestModelsPerTree_f = open(working_dir+'/BestModel_per_Tree.txt','w')
-	# ----------------------------------------------------------------------------------------------------------#
+
+	results_lists = []
+	
 	if (Rerun_flag != 'Rerun'):
-		#Edit counts file:
-		tree_for_counts = open(working_dir + '/counts_Tree','w')
-		with open(param_dict['_treesFile'], 'r') as trees_f:
-			for line in trees_f:
-				if line.strip():
-					tree_for_counts.write(line.strip())
-					break
-			tree_for_counts.close()
-
-		# edit_counts_file will also check for indiscrepancies between the counts and tree file the user entered.
-		# In case of a mismatch we produce the corresponding not to the user to enable correction:
-		JobID = os.path.basename(os.path.normpath(working_dir))
-		flag_mismatch,spc_no_counts,spc_missing_onTree =  edit_counts_file(working_dir,working_dir + '/counts_Tree', working_dir + '/countsFile', working_dir + '/countsFile_edit',JobID)
-		remove_spc_f = working_dir + '/RemoveSpc.txt'
-		with open(remove_spc_f,'w') as rem_spc_f:
-			for taxa in spc_no_counts:
-				rem_spc_f.write(taxa.replace(' ','_') + '\n')
-
-		#if (param_dict['PruneCounts'] == 'Xcounts'):
-		if (param_dict['PruneCounts'] == 'PruneTree') and os.stat(remove_spc_f).st_size != 0:
-			#add_x_counts_for_missing_taxa() #working_dir, tree_file, remove_species_list
-			Rcmd_pruneTree = ("R CMD BATCH '--args working_dir=" + '"' + working_dir + '"' +
-								 " trees_file=" + '"' + working_dir +'/TreesFile.txt' + '"' + " remove_species_list=" + '"' + remove_spc_f + '"' +
-								 " outfile=" + '"' +working_dir +'/TreesFile_R.txt' + '"' + "' " + CHROMEVOL_CODE_PATH + "prune.trees.R")
-			print_to_log(Rcmd_pruneTree,Log_f)
-			stats_r = os.system(Rcmd_pruneTree)
-			if stats_r != 0:
-				print_to_log("Prune R status is %s" % stats_r, Log_f)
-				send_end_email(param_dict,working_dir,"FAIL")
-				sys.exit()
-			else:
-				shutil.copyfile(working_dir +'/TreesFile.txt',working_dir +'/TreesFile_Origin.txt')
-				shutil.copyfile(working_dir +'/TreesFile_R.txt',working_dir +'/TreesFile.txt')
-		#if flag_mismatch == 1:
-		#	with open(working_dir + '/Status.txt', 'w') as stats_f:
-		#		stats_f.write("Check file Species_Counts_match.txt")
-		#	sys.exit()
-
-
-		models_list = get_models_from_file(param_dict)
+		
+		data = json.loads(param_dict['definedModels'])
+		counter = 0
+		models_list = []
+		for d in data: 
+			models_list.append(d['name'])
+			counter += 1
+			
 		working_tree_dirs, dirs_tree_dict = choose_random_trees(working_dir, working_dir + '/TreesFile.txt',
 																selected_TreeNum)
-		#param_dict['_dataFile'] = param_dict['_dataFile']
 		print_to_log("Number of trees to run on: %d" %len(working_tree_dirs), working_dir + '/Log.txt')
 
 		if os.path.exists(working_dir+'/Over_50prec_phylogenies.txt'):
@@ -1681,7 +1859,7 @@ try:
 			#models_list = get_models_from_file(param_dict)
 			print_to_log("models selected are: %s" % models_list, working_dir + '/Log.txt')
 			results_lists.append(creat_models_and_params(working_dir,tree_dir,dirs_tree_dict,models_list,param_dict,queue_name))
-
+		
 		counter_time = 0
 		while counter_time < 1000:
 			for list_res in results_lists:
@@ -1715,33 +1893,47 @@ try:
 			treeFile = dirs_tree_dict[tree_dir]
 
 			#------------------------------     SIMULATIONS     ------------------------------#
-			if 'NO_DUPL' not in BestModel:	#results_flag != selected_TreeNum:
+			if ploidy_flag == 'ON' and 'NO_DUPL' not in BestModel:
 				cmd_simulation = 'python %s/simulation_test.py -m %s -td %s -pd %s -tree %s -wd %s'\
 				%(CHROMEVOL_CODE_PATH,BestModel,tree_dir,param_dict_file,treeFile,working_dir)
 				Tree_NUM = tree_dir.split('_')[-1].replace('/','')
+				print_to_log(f'calling: {cmd_simulation}', working_dir + '/Log.txt')
 				send_SIM_job_cmd(cmd_simulation, tree_dir, Tree_NUM, queue_name)
 
-		sim_summary = open(working_dir+'/Simulation_summary.txt','w')
-		counter_sim_time=0
-		while counter_sim_time < 1000:
-			if Check_if_SIM_ready(2,working_tree_dirs,sim_summary) == 0:
-				print_to_log("All simulation completed", working_dir + '/Log.txt')
-				break
-			else:
-				print_to_log("Some simulations are still running", working_dir + '/Log.txt')
-			counter_sim_time+=1
+		if ploidy_flag == 'ON': # JS - commented out
+			sim_summary = open(working_dir+'/Simulation_summary.txt','w')
+			counter_sim_time=0
+			while counter_sim_time < 1000:
+				if Check_if_SIM_ready(2,working_tree_dirs,sim_summary) == 0:
+					print_to_log("All simulation completed", working_dir + '/Log.txt')
+					break
+				else:
+					print_to_log("Some simulations are still running", working_dir + '/Log.txt')
+				counter_sim_time+=1
 
+	# --------------------------------------------------------------------------------------------------------------------#
+	# -----------------------------------------       Create Results for WEB      ----------------------------------------#
+	# --------------------------------------------------------------------------------------------------------------------#
+	
+	print_to_log("Creating results files:", working_dir + '/Log.txt')
+	print_to_log("models_list :%s"%models_list, working_dir + '/Log.txt')
+	print_to_log(f'AIC_per_model_dict: {AIC_per_model_dict}', working_dir + '/Log.txt')
+	#Create_results_for_web(working_dir,models_list,model_adq_list,AIC_per_model_dict, param_dict)
+	Create_results_for_web(working_dir,models_list,[],AIC_per_model_dict, param_dict)
+	with open(working_dir+'/Status.txt','w') as stats_f:
+		stats_f.write("Results files ready")
+	stats_f.close()
+	
+	#------------------------------     MODEL ADEQUACY     ------------------------------#
+	print_to_log("Rerun_flag is %s" % Rerun_flag, working_dir + '/Log.txt')
+	if (Rerun_flag != 'Rerun'):
 		print_to_log("Model Adeq flag is %s"%model_adq_flag, working_dir + '/Log.txt')
 		model_adq_list = []
 		if model_adq_flag != 'OFF':
 			for tree_dir in working_tree_dirs:
 				model_adq_list = MA_Test(tree_dir, tree_BestModel_dict[tree_dir], model_adq_flag, param_dict)
-
-
-	#------------------------------     Check if ReRun     ------------------------------#
-
-	print_to_log("Rerun_flag is %s" % Rerun_flag, working_dir + '/Log.txt')
-	if (Rerun_flag is 'Rerun'):
+	else: 
+	#------------------------------     MODEL ADEQUACY for ReRun     ------------------------------#
 		model_adq_list = []
 		tree_BestModel_dict=dict()
 		for tree_dir in working_tree_dirs:
@@ -1753,70 +1945,57 @@ try:
 			model_adq_list = []
 			for tree_dir in working_tree_dirs:
 				model_adq_list = MA_Test(tree_dir, tree_BestModel_dict[tree_dir], model_adq_flag, param_dict)
-
-	# -------------- Create Results for WEB -----------------#
-	# Final file:
-	f_final = open(working_dir + '/END.txt', 'a')
-	f_final.write("Chromevol run was completed\n")
-
-	print_to_log("Creating results files:", working_dir + '/Log.txt')
-	print_to_log("models_list :%s"%models_list, working_dir + '/Log.txt')
+	
+	# Create MA table in results page
 	print_to_log("model_adq_list :%s"%model_adq_list, working_dir + '/Log.txt')
-	Create_results_for_web(working_dir,models_list,model_adq_list,AIC_per_model_dict)
-	#Create_results_for_web(working_dir,model_adq_list)
-	with open(working_dir+'/Status.txt','w') as stats_f:
-		stats_f.write("Results files ready")
-
-	# ------------- Convert trees for new Phy3 --------------#
-	#for tree_dir in working_tree_dirs:
-	#	for model_id in models_list:
-	#		tree_f = tree_dir + '/' + model_id + '/mlAncestors.tree'
-	#		tree_xml = tree_dir + model_id + '/mlAncestors_phylo'
-	#		Phylo.convert(tree_f, 'newick', tree_xml, 'phyloxml')
-
+	if model_adq_flag != 'OFF':
+		Create_MA_results_for_web(working_dir,models_list,model_adq_list,AIC_per_model_dict, param_dict)
+		with open(working_dir+'/Status.txt','w') as stats_f:
+			stats_f.write("MA adequacy results ready.")
+		stats_f.close()
+	
+	
+	# --------------------------------------------------------------------------------------------------------------------#
+	# -----------       Post Running Stage (Check Inferences, Create Ploidy and Converting trees)      -------------------#
+	# --------------------------------------------------------------------------------------------------------------------#
+	
+	# --------------- check inferences (simulation) and summarize_models ---------#
+	
+	NoDuple = 'No'	# if more than 50% selected models are NoDuple -> this flag will be set to Yes
+	if ploidy_flag == 'ON': # JS - commented out !!!
+		completedPhylogenies = check_inferences(working_dir,working_tree_dirs,working_dir)
+		print_to_log("len(completedPhylogenies) is %d\n" %len(completedPhylogenies), working_dir + '/Log.txt')
+		if len(completedPhylogenies) == 0:
+			fail ("Ploidy inference failed", "ploidy_inference", Error_f)
+		else:
+			if len(completedPhylogenies) <= selected_TreeNum:
+				modelsSumFile = working_dir + '/models_summary'
+				models_sum = summarize_models(working_tree_dirs, modelsSumFile)
+				if (models_sum == 0):
+					NoDupleMoreThan50 = open(working_dir + '/NoDuple_MoreThan50.txt','w')
+					NoDupleMoreThan50.write('More than 50% NoDuple models\n')
+					NoDuple = 'Yes'
+					NoDupleMoreThan50.close()
+				elif len(completedPhylogenies) >= selected_TreeNum/2:
+					Over_50p_Trees = open(working_dir + '/Over_50prec_phylogenies.txt', 'w')
+					Over_50p_Trees.write('completedTreesNums: %d\n' % len(completedPhylogenies))
+					Over_50p_Trees.close()
+				else:
+					NotEnoughTrees = open(working_dir + '/Less_than_50_phylogenies.txt','w')
+					NotEnoughTrees.write('completedTreesNums: %d\n' %len(completedPhylogenies))
+					NotEnoughTrees.close()
+			else:
+				print_to_log("completedPhylogenies equals %d\n" % selected_TreeNum, working_dir + '/Log.txt')
 
 	#-------------- Create Ploidy -----------------#
-	NoDuple = 'No'	# if more than 50% selected models are NoDuple -> this flag will be set to Yes
-
-	#summarize_models:
-	completedPhylogenies = check_inferences(working_dir,working_tree_dirs,working_dir)
-	print_to_log("len(completedPhylogenies) is %d\n" %len(completedPhylogenies), working_dir + '/Log.txt')
-	if len(completedPhylogenies) == 0:
-		with open(working_dir + '/FAIL.txt','w') as outcome_f:
-			outcome_f.write('Completed Phylogenies returned 0 -> Error while running\n')
-		outcome_f.close()
-		send_end_email(param_dict, working_dir,"FAIL")
-		sys.exit()
-	else:
-		if len(completedPhylogenies) <= selected_TreeNum:
-			modelsSumFile = working_dir + '/models_summary'
-			models_sum = summarize_models(working_tree_dirs, modelsSumFile)
-			if (models_sum == 0):
-				NoDupleMoreThan50 = open(working_dir + '/NoDuple_MoreThan50.txt','w')
-				NoDupleMoreThan50.write('More than 50% NoDuple models\n')
-				NoDuple = 'Yes'
-				NoDupleMoreThan50.close()
-			elif len(completedPhylogenies) >= selected_TreeNum/2:
-				Over_50p_Trees = open(working_dir + '/Over_50prec_phylogenies.txt', 'w')
-				Over_50p_Trees.write('completedTreesNums: %d\n' % len(completedPhylogenies))
-				Over_50p_Trees.close()
-			else:
-				NotEnoughTrees = open(working_dir + '/Less_than_50_phylogenies.txt','w')
-				NotEnoughTrees.write('completedTreesNums: %d\n' %len(completedPhylogenies))
-				NotEnoughTrees.close()
-		else:
-			print_to_log("completedPhylogenies equals %d\n" % selected_TreeNum, working_dir + '/Log.txt')
-
-
-
+	
 	print_to_log("Ploidy Flag - %s, NoDuple is %s\n"%(ploidy_flag,NoDuple),working_dir+'/Log.txt')
 	if ploidy_flag == 'ON' and NoDuple == 'No':
 		print_to_log("Call create_ploidy with %s\n"%working_tree_dirs, working_dir + '/Log.txt')
 		create_ploidy(working_tree_dirs,working_dir)
 
-	#--------------------------------------------------------------------------------------------------------------------#
-	#		converting trees to phyD3
-	#--------------------------------------------------------------------------------------------------------------------#
+
+	#-----------------converting trees to phyD3-----------------------------------------#
 
 	for tree_dir in working_tree_dirs:
 		for model_name in models_list:
@@ -1830,16 +2009,11 @@ try:
 				convert_to_PhyD3(input_tree, counts_path, ploidy_path)
 			else:
 				convert_to_PhyD3(input_tree, counts_path, 'None')
-
-			# Create zip files of results for each model for sownload:
-			#with zipfile.ZipFile(dir_path + '/%s_results.zip'%model_name, 'a') as myzip:
-			#	myzip.write(dir_path + '/Results_Events.csv','Results_Events.csv')
-			#	myzip.write(dir_path + '/Results_ExpNum.csv','Results_ExpNum.csv')
-			#	myzip.write(dir_path + '/mlAncestors.tree','mlAncestors.tree')
-			#	myzip.write(dir_path + '/posteriorAncestors.tree','posteriorAncestors.tree')
-			#	myzip.write(dir_path + '/chromEvol.res','chromEvol.res')
-			#myzip.close()
-
+	
+	# Final file:
+	f_final = open(working_dir + '/END.txt', 'a')
+	f_final.write("Chromevol run was completed\n")
+	
 	with open(working_dir+'/Status.txt','w') as stats_f:
 		stats_f.write("Completed")
 	with open(working_dir+'/JOB_PASS.txt','w') as pass_f:
@@ -1848,11 +2022,38 @@ try:
 	#End of run
 	send_end_email(param_dict,working_dir,"PASS")
 
-except:
-	with open(working_dir+'/Status.txt','a') as stats_f:
-		stats_f.write("Error while running, please contact us for more details.")
-	with open(working_dir+'/END.txt','a') as stats_f:
-		stats_f.write("Except error line 1868")
+except Exception as e:
+
+	# get error message
+	if len(e.args) > 0:
+		error_msg = e.args[0]
+	
+	# assign status string according to error type
+	if len(e.args) > 1 and e.args[1]=="validation":
+		status_msg = "Input error"
+	elif len(e.args) > 1 and e.args[1]=="ploidy_inference":
+		status_msg = "Ploidy inference failed"
+	else:
+		JobID = os.path.basename(os.path.normpath(working_dir))
+		send_mail_cmd = f'mailto:evolseq@post.tau.ac.il?subject=chromEvol%20Run%20No.:%20{JobID}'
+		status_msg = 'Error while running, please <a href="{send_mail_cmd}">contact us</a> for more details.'
+		
+	# write input validation message
+	
+	with open(working_dir+'/taxa_input_report.txt','w') as f_inputs_report:
+		f_inputs_report.write(error_msg)
+	f_inputs_report.close()
+
+	# write status string
+	with open(working_dir+'/Status.txt','w') as stats_f:
+		stats_f.write(status_msg)
+	stats_f.close()
+	
+	# write error_msg in END.txt
+	with open(working_dir+'/END.txt','a') as end_f:
+		end_f.write(error_msg)
+	end_f.close()
+	
 	send_end_email(param_dict, working_dir, "FAIL")
 
 

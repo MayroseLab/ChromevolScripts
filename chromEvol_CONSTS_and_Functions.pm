@@ -52,6 +52,7 @@ use constant FILENAME_CHROM_COUNTS		=> "chrom_counts_data.txt";
 use constant FILENAME_ADEQUACY			=> "Adeq_Results.csv";
 use constant FILENAME_BEST_MODELS		=> "BestModel_per_Tree.txt";
 use constant FILENAME_PIP	=> "PIP_control";
+use constant FILENAME_PLOIDY_CSV 		=> "ploidy.csv";
 
 
 ######### Functions ############

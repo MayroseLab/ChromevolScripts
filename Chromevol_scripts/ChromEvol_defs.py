@@ -128,6 +128,7 @@ def summarize_models(working_tree_dirs,modelsSummaryFile):
 		else:
 			model_sum_f.close()
 			return 1
+			
 # ----------------------------------------------------------------------------------------------------------#
 def computeReliabilityProfile(INF, SIM, type):
 	# sub compute reliability profile
@@ -519,3 +520,15 @@ def summarize_reliability_for_power(relSim,relInf,countsFile,outFile):
 
 	return
 # ----------------------------------------------------------------------------------------------------------#
+def getIndexByModel(data, model):
+	counter = 0;
+	for d in data: 
+		if d['name'] == model:
+			return counter
+		counter += 1
+	return -1
+# ----------------------------------------------------------------------------------------------------------#
+def fail(error_msg, type, error_file_path):
+    with open(error_file_path, 'w') as error_f:
+        error_f.write(error_msg + '\n')
+    raise Exception(error_msg, type)

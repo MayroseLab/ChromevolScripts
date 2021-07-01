@@ -1,5 +1,6 @@
 import argparse, os
 from ChromEvol_defs import *
+import json
 
 PARAMS_PATH = '/bioseq/chromEvol/power_PARAM_templates'
 DEBUG_FLAG=0
@@ -240,8 +241,10 @@ def read_param_dict_to_dict(param_dict_file):
 	param_dict=dict()
 	for line in dict_file:
 		key = line.strip().split(',')[0]
-		if '_runModels' in key:
-			data = line.strip().split(',')[1:]
+		#if '_runModels' in key:
+		#	data = line.strip().split(',')[1:]
+		if 'definedModels' in key:
+			data = line.strip().split(',', 1)[1]
 		else:
 			data = line.strip().split(',')[1]
 		param_dict[key]=data
@@ -407,34 +410,22 @@ def get_spc_in_counts(working_dir,countsFile):
 #----------------------------------------------------------------------------------------------------------#
 def get_models_from_file(params_dict):
 	params_list = []
-	if params_dict['_runModels']=="ALL":
-		#params_list = ["CONST_RATE","CONST_RATE_DEMI","CONST_RATE_DEMI_EST","CONST_RATE_NO_DUPL",
-		#			"LINEAR_RATE","LINEAR_RATE_DEMI","LINEAR_RATE_DEMI_EST","LINEAR_RATE_NO_DUPL",
-		#			"BASE_NUM","BASE_NUM_DUPL"]
-		params_list = ["CONST_RATE","CONST_RATE_DEMI","CONST_RATE_DEMI_EST","CONST_RATE_NO_DUPL",
-						"BASE_NUM","BASE_NUM_DUPL"]
-		return params_list
-	elif params_dict['_runModels']=="CONST":
-		params_list = ["CONST_RATE","CONST_RATE_DEMI","CONST_RATE_DEMI_EST","CONST_RATE_NO_DUPL",
-					"BASE_NUM","BASE_NUM_DUPL"]
-		return params_list
-	elif params_dict['_runModels']=="LINEAR":
-		params_list = ["LINEAR_RATE","LINEAR_RATE_DEMI","LINEAR_RATE_DEMI_EST","LINEAR_RATE_NO_DUPL"]
-		return params_list
-	else:
-		#split_line = params_dict['_runModels'].split(',')
-		split_line = params_dict['_runModels']
-		for item in split_line:
-			if item != '':
-				params_list.append(item)
-		return params_list
+	print(params_dict['definedModels'])
+	data = json.loads(params_dict['definedModels'])
+	counter = 0
+	for d in data: 
+		params_list.append(d['name'])
+		counter += 1
+	return params_list, data
+	
 #----------------------------------------------------------------------------------------------------------#
-def prepare_initial_run(working_dir,params_dict,treeFile,countFile,paramDir,runModels,excludeModels,baseNum,root,outDir): # For simulations
+def prepare_initial_run( working_dir, params_dict, treeFile, countFile, outDir):
+#def prepare_initial_run(working_dir,params_dict,treeFile,countFile,paramDir,runModels,excludeModels,baseNum,root,outDir): # For simulations
 #working_dir,param_dict,treeFile, simDataFile, paramTemplateDir, bestModel, 0, 0, 0, simInferDir,dirs_tree_dict
 	# sub prepare initial chromevol run
 	# prepares the required files for the initial chromevol run
 
-	modelsList = get_models_from_file(params_dict)
+	modelsList, data = get_models_from_file(params_dict)
 	paramFiles = []
 	for model in modelsList:    ### parameter files
 		print(model)
@@ -450,9 +441,10 @@ def prepare_initial_run(working_dir,params_dict,treeFile,countFile,paramDir,runM
 		#maxChrNum = -10
 		#minChrNum = -1
 
+		model_i = getIndexByModel(data, model);
+		edit_param_file_sim1(outDir, treeFile, model, params_dict, working_dir, data[model_i])
 		#edit_param_file_sim(working_dir, outDir, treeFile, model, param_dict)
-		edit_param_file_sim(outDir, treeFile, model, params_dict,working_dir)
-			#parseParamFile(param_f, outDir, treeFile, countFile)
+		#parseParamFile(param_f, outDir, treeFile, countFile)
 
 
 	return
@@ -544,6 +536,52 @@ def edit_param_file_sim(out_dir,tree_file,model_name,param_dict,working_dir):
 
 	return param_local_file
 
+#def edit_param_file1(working_dir,tree_dir,dirs_tree_dict,model_name,model_dict,param_dict):
+def edit_param_file_sim1(out_dir, tree_file, model_name, param_dict, working_dir, model_dict):
+	#for model_item in params_list:
+	param_local_dir = out_dir #+ '/' + model_name
+	param_local_file = param_local_dir + '/param_' + model_name + '.txt'
+	if not os.path.exists(param_local_dir): os.makedirs(param_local_dir)
+	shutil.copyfile(PARAMS_PATH + '/param_NEW_MODELS', param_local_file)
+	counts_file = param_local_dir + '/sim_data.counts'
+	new_data = ''
+	
+	print_to_log("calling prep_params_for_sim", working_dir + '/Log.txt')
+	param_dict_sim=prep_params_for_sim(working_dir, counts_file, param_dict)
+	
+	with open(param_local_file, 'r') as param_file:
+		for line in param_file:
+			if '_simulationsNum' in line:
+				new_line = line.replace('_simulationsNum 0', '_simulationsNum 100')
+			new_line = line.replace('<OUT_DIR>', f'{param_local_dir}/{model_name}/')
+			new_line = new_line.replace('<CNT_FILE>', counts_file)
+			new_line = new_line.replace('<TREE_FILE>', tree_file)
+			new_line = new_line.replace('<MAX_CHR_NUM>', str(param_dict_sim['_maxChrNum']))  # str(max_chrom_num))
+			new_line = new_line.replace('<MIN_CHR_NUM>', str(param_dict_sim['_minChrNum']))
+			if model_dict['_baseNumberR'] == 1: 
+				logVal = 10
+			else: 
+				logVal = 6
+			new_line = new_line.replace('<LOG_VAL>', str(logVal))
+			new_data += (new_line)
+			
+	with open(param_local_file, 'w') as param_file:
+		param_file.write(new_data)
+		for key, value in model_dict.items():
+			if value != 0 and key != "name": 
+				param_file.write(f'{key} {value}\n')
+
+		# add lines for _baseNumber, _bOptBaseNumber, _minBaseTransition according to model
+		if model_dict['_baseNumberR'] == 1:
+			param_file.write(f'_baseNumber {param_dict["_baseNumber"]}\n')
+			if param_dict['_baseNumber'] != 0:
+				param_file.write(f'_bOptBaseNumber {param_dict["_bOptBaseNumber"]}\n')
+			param_file.write('_minBaseTransition 0\n')
+			
+	param_file.close()
+	
+	return param_local_file
+	
 #-----------------------------------------     Simulation for Chromevol    --------------------------------------#
 
 # process input from command line
@@ -609,7 +647,8 @@ if str(goodSim) != '0':
 	parse_sim_results(param_dict['_dataFile'], simCountsFile, simDataFile, working_dir)
 	#treeFile = dirs_tree_dict[tree_dir]
 	#working_dir,params_dict,treeFile,outDir
-	prepare_initial_run(working_dir, param_dict, treeFile, simDataFile, PARAMS_PATH, BestModel, 0, 0, 0, simInferDir)
+	prepare_initial_run(working_dir, param_dict, treeFile, simDataFile, simInferDir)
+	#prepare_initial_run(working_dir, param_dict, treeFile, simDataFile, PARAMS_PATH, BestModel, 0, 0, 0, simInferDir)
 	#prepare_initial_run(working_dir, param_dict, treeFile, simInferDir)
 
 	## run inference from sim

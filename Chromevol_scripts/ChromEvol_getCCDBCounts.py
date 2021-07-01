@@ -14,19 +14,14 @@ import csv
 from collections import Counter
 import sqlite3
 from Bio import Phylo
-#from taxonome.taxa.file_csv import load_taxa
-#from taxonome.taxa.name_selector import NameSelector
-#from taxonome.tracker import CSVTaxaTracker, _flatten_name, CSVListMatches
 import unicodedata
 import pickle
 import sys
 import os
 from collections import namedtuple
 
-# Running line:
-#python /groups/itay_mayrose/michaldrori/Pipeline_Files/CCDB/make_ccdb_counts_files_for_chromevol.py Pipeline_Files/Alignment_TaxonList/Taxon_list_origin.txt
-
-CCDB_DATABASE = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/CCDB_1.46.db'
+CCDB_DATABASE = '/bioseq/chromEvol/CCDB_1.58.db'
+#CCDB_DATABASE = '/groups/itay_mayrose/michaldrori/MD_ChromEvol/CCDB_1.46.db'
 
 #--------------------------------------------------def-------------------------------------------------------
 def turn_list_to_DB_list(list_name):
@@ -101,7 +96,6 @@ def check_max_value(dist_dict):
 		new_max_count = max(dist_dict.keys())
 		return new_max_count
 # --------------------------------------------------def-------------------------------------------------------
-#max,dist = calc_distribution(species_dist_dict)
 def calc_distribution(species_dist_dict,path):
 
 	#split data which include list of counts for one count
@@ -231,9 +225,6 @@ def get_counts_for_species (genus,db_curser):
 
 	return rows_genus_db
 #--------------------------------------------------------------------------------------
-
-
-
 def get_ploidy_data_all(ploidy_file,file_handle):
 	ploidy_dict = {}
 	chromCount_dict = {}
@@ -250,8 +241,7 @@ def get_ploidy_data_all(ploidy_file,file_handle):
 			if DEBUG_FLAG == 1:
 				file_handle.write("%s,%s,%s\n" % (species_name,chromCount_dict[species_name],ploidy_dict[species_name]))
 		return (ploidy_dict,chromCount_dict)
-
-
+#--------------------------------------------------------------------------------------
 def recalc_median(species_name,db_curser):
 	list_parsed_n=[]
 	query_species_parsed_n_db = "SELECT parsed_n FROM resolved_chrom_counts WHERE resolved_name LIKE '%s'" % species_name
@@ -275,23 +265,139 @@ def recalc_median(species_name,db_curser):
 	else:
 		new_median = int(statistics.median(list_parsed_n))
 	return new_median
+#--------------------------------------------------------------------------------------
+def break_comma_db_rows(db_rows): 
+	new_db_rows = []
+	for line in db_rows:
+		if not line[1]:
+			continue
+		if ',' not in line[1]:
+			new_db_rows.append(line)
+			continue
+		vals = line[1].split(',')
+		for v in vals:
+			new_line = []; 
+			new_line.append(line[0])
+			new_line.append(v.strip())
+			new_db_rows.append(new_line)
+	return new_db_rows
+#--------------------------------------------------------------------------------------
+def get_db_rows_value(db_rows, flag): 
 
-#D:\Michal\scripts\make_ccdb_counts_files_for_chromevol.py
+	prev_spec = ''
+	n_list = []
+	n_counts = []
+	counts = {}
+	counts_list = []
+	total_counts = 0
+	results = []
+	
+	for line in db_rows:
+		cur_spec = line[0]
+		
+		if cur_spec != prev_spec and prev_spec != '':
+		
+			# append species group to results
+			sorted_l = sorted(n_list)
+			counts_list = []
+			u_score = ''
+			dist_str = ''
+			n = 0
+			len_list = len(n_list)
+			sum = 0
+			for i in sorted_l: 
+				counts_list.append(counts[str(i)])
+				freq = counts[str(i)] / total_counts
+				if n < len_list-1:
+					ffreq = "{:.2f}".format(freq)
+				else:
+					ffreq = "{:.2f}".format(round(1-sum,2))
+				sum = sum + float(ffreq)
+				dist_str += f'{u_score}{i}={ffreq}'
+				u_score = '_'
+				n += 1
+			
+			if flag == 'max':
+				val = max(n_list)
+			elif flag == 'min':
+				val = min(n_list)
+			elif len(n_list) > 1:
+				val = dist_str
+			else:
+				val = n_list[0]
+			
+			new_line = []; 
+			new_line.append(prev_spec)
+			new_line.append(val)
+			results.append(new_line)
+			
+			# reset vars
+			prev_spec = cur_spec
+			n_list = []
+			n_counts = []
+			counts = {}
+			total_counts = 0
+		
+		# on first loop
+		if prev_spec == '':
+			prev_spec = cur_spec
+			
+		# add to count lists
+		ival = int(line[1])
+		cval = line[1]
+		if ival not in n_list: 
+			n_list.append(ival)
+			counts[cval] = 0
+		counts[cval] += 1
+		total_counts += 1
+	
+	# last value
+	if len(n_list) > 0: 
+		sorted_l = sorted(n_list)
+		counts_list = []
+		u_score = ''
+		dist_str = ''
+		n = 0
+		len_list = len(n_list)
+		sum = 0
+		for i in sorted_l: 
+			counts_list.append(counts[str(i)])
+			freq = counts[str(i)] / total_counts
+			if n < len_list-1:
+				ffreq = "{:.2f}".format(freq)
+			else:
+				ffreq = "{:.2f}".format(round(1-sum,2))
+			sum = sum + float(ffreq)
+			dist_str += f'{u_score}{i}={ffreq}'
+			u_score = '_'
+			n += 1
+			
+		if flag == 'max':
+			val = max(n_list)
+		elif flag == 'min':
+			val = min(n_list)
+		elif len(n_list) > 1:
+			val = dist_str
+		else:
+			val = n_list[0]
+		
+		new_line = []; 
+		new_line.append(line[0])
+		new_line.append(val)
+		results.append(new_line)
+			
+		return results
 
 if __name__ == "__main__":
 
-
-	#Count_type = 'Min' #options are: median, max, dist (distribution)
 	tree_or_genera = sys.argv[1]
-	Output_ForCounts = sys.argv[2] #'/groups/itay_mayrose/michaldrori/MD_ChromEvol/Counts_ccdb'
-	Tree_or_Name = sys.argv[3] # 0 -> Tree file 1 -> list of genera in file
+	Output_ForCounts = sys.argv[2] 	# log file
+	Tree_or_Name = sys.argv[3] 		# 0 -> Tree file 1 -> list of genera in file
+	counts_type = sys.argv[4] 		# median, max, min, distribution
 	genera_list=[]
 	taxa_list=[]
 	out_file = "Counts.txt"
-	#out_handle = open(out_file,mode="w",encoding='utf8',newline='')
-	#writer = csv.writer(out_handle,delimiter=',')
-	#writer.writerow(['genus','resolved_name_full','resolved_name','median','status'])
-	#with open('/groups/itay_mayrose/michaldrori/Pipeline_Files/Alignment_TaxonList/Angio_Missing.txt','r') as f:
+	
 	file_out = open(Output_ForCounts + "/COUNTS_DATA_LOG.txt", mode="w", encoding='utf8', newline='')
 	if Tree_or_Name == '0':
 		species_list = get_leaf_names(tree_or_genera)
@@ -307,146 +413,72 @@ if __name__ == "__main__":
 		with open(tree_or_genera,'r') as f:
 			genera_list = [g.strip() for g in f.readlines()]
 
-	# file_LessThan5Counts=open(Output_ForCounts + "/Genera_withLessThan5Counts.txt",mode="w",encoding='utf8',newline='')
 
 	species_dist_dict = dict()
-	count_counts = 0
 	counts_file = Output_ForCounts + '/countsFile'
 	counts_file = open(counts_file, 'w')
-	species_names = []
-	species_median_dict = {}
-	species_status_dict = {}
-	species_parsed_n_dict = {}
+	#species_names = []
+	#species_median_dict = {}
+	#species_status_dict = {}
+	#species_parsed_n_dict = {}
+	
+	# db connection
+	if not os.path.exists(CCDB_DATABASE): 
+		file_out.write("file %s does not exist\n" %CCDB_DATABASE)
 	conn_db = sqlite3.connect(CCDB_DATABASE)
 	db_curser = conn_db.cursor()
 	taxa_list_str = turn_list_to_DB_list(taxa_list)
 	genera_list_str = turn_list_to_DB_list(genera_list)
+	
+	# create query string
 	if Tree_or_Name != '1':
-		query_taxa_counts_db = "SELECT distinct resolved_name,median from resolved_chrom_counts where lower(resolved_name) in (%s)" % taxa_list_str
+		if counts_type == 'median': 
+			query_taxa_counts_db = "SELECT distinct resolved_name,median from resolved_chrom_counts where lower(resolved_name) in (%s)" % taxa_list_str
+		else: 
+			query_taxa_counts_db = "SELECT resolved_name, parsed_n from resolved_chrom_counts where lower(resolved_name) in (%s) ORDER by resolved_name" % taxa_list_str
 	else:
 		query_taxa_counts_db = "SELECT distinct resolved_name,median from resolved_chrom_counts where lower(genus) in (%s)" % genera_list_str
+	
+	# execute query string
 	file_out.write('%s\n' % query_taxa_counts_db)
-	#query_genus_species_db = "SELECT id,genus,resolved_name_full,resolved_name,parsed_n,median,status from resolved_chrom_counts WHERE genus is '%s'" % genus
-	# query_genus_species_db = "SELECT resolved_name FROM resolved_chrom_counts WHERE genus is '%s'" % genus
 	db_curser.execute(query_taxa_counts_db)
 	rows_genus_db = db_curser.fetchall()
-	for line in rows_genus_db:
+	
+	# derive counts according to counts type
+	if counts_type == 'median': 
+		results = rows_genus_db
+	else: # min, max, distribution
+		new_rows_genus_db = break_comma_db_rows (rows_genus_db)
+		file_out.write("breaking down rows:\n")
+		for line in new_rows_genus_db:
+			file_out.write("{line}\n")
+		results = get_db_rows_value(new_rows_genus_db, counts_type)
+		
+	# write to counts file
+	count_counts = 0
+	for line in results:
 		specie_name = line[0]
-		#parsed_n = line[4]
 		if line[1]:
-			median_val = line[1]
+			val = line[1]
 		else:
-			median_val = 'x'
+			val = 'x'
 		counts_file.write('>%s\n' % specie_name.replace(' ','_'))
-		counts_file.write('%s\n' % median_val)
+		counts_file.write('%s\n' % val)
 		count_counts += 1
+	
+	# write species list for OneTwoTree
+	species_list = Output_ForCounts + '/species_list'
+	f_species = open(species_list, 'w')
+	comma = ""
+	for line in results:
+		specie_name = line[0]
+		f_species.write (comma+specie_name)
+		comma = ','
+	f_species.close()
+		
 	# Check number of counts:
 	if count_counts < 5:
 		less_f = open(Output_ForCounts + '/LESS_THAN_5_COUNTS', 'w')
 		less_f.close()
 	counts_file.close()
 
-
-	#file_LessThan5Counts=open(Output_ForCounts + "/Genera_withLessThan5Counts.txt",mode="w",encoding='utf8',newline='')
-###	for genus in genera_list:
-###		species_dist_dict=dict()
-###		count_counts=0
-###		print(genus)
-###		counts_file = Output_ForCounts + '/countsFile'
-###		counts_file=open(counts_file,'w')
-###		species_names=[]
-###		species_median_dict={}
-###		species_status_dict={}
-###		species_parsed_n_dict={}
-###		conn_db = sqlite3.connect(CCDB_DATABASE)
-###		db_curser = conn_db.cursor()
-###		query_genus_species_db = "SELECT id,genus,resolved_name_full,resolved_name,parsed_n,median,status from resolved_chrom_counts WHERE genus is '%s'" % genus
-###		#query_genus_species_db = "SELECT resolved_name FROM resolved_chrom_counts WHERE genus is '%s'" % genus
-###		db_curser.execute(query_genus_species_db)
-###		rows_genus_db = db_curser.fetchall()
-###		for line in rows_genus_db:
-###			specie_name = line[3]
-###			parsed_n = line[4]
-###			median_val = line[5]
-###			status = line[6]
-###			#Check for duplicate species names:
-###			if specie_name in species_names:
-###				if DEBUG_FLAG == 1: print(specie_name)
-###				if DEBUG_FLAG == 1: print(parsed_n)
-###				if DEBUG_FLAG == 1: print(status)
-###				#create data arrayes for max/dist calc
-###				#if status: # == 'Accepted':
-###				if specie_name in species_dist_dict.keys():
-###					species_dist_dict[specie_name].append(parsed_n)
-###				else:
-###					species_dist_dict[specie_name]=[parsed_n]
-###				#Check if same median value:
-###				if median_val == species_median_dict[specie_name]:
-###					#No need to add data
-###					continue
-###				#Check if different median and different status:
-###				else:
-###					#Check if Different status and take Accepted median:
-###					if status != species_median_dict[specie_name]:
-###						#Update values according to Accepted specie:
-###						if status == 'Accepted':
-###							#First remove the existing value if exists:
-###							if specie_name in species_names:
-###								file_out.write("%s is being removed, Accepted median was found\n" %specie_name)
-###								species_names.remove(specie_name)
-###								del species_median_dict[specie_name]
-###								del species_status_dict[specie_name]
-###								del species_parsed_n_dict[specie_name]
-###							species_names.append(specie_name)
-###							species_median_dict[specie_name]=median_val
-###							species_status_dict[specie_name]=status
-###							species_parsed_n_dict[specie_name]=parsed_n
-###							if specie_name in species_dist_dict.keys():
-###								species_dist_dict[specie_name].append(parsed_n)
-###							else:
-###								species_dist_dict[specie_name] = [parsed_n]
-###						else:
-###							continue
-###					else:
-###						#Different values to same status:
-###						file_out.write('## Need to re-calc median for %s\n' % specie_name)
-###						continue
-###			#Specie name not in list:
-###			else:
-###				species_names.append(specie_name)
-###				species_median_dict[specie_name]=median_val
-###				species_status_dict[specie_name]=status
-###				species_parsed_n_dict[specie_name]=parsed_n
-###				if specie_name in species_dist_dict.keys():
-###					species_dist_dict[specie_name].append(parsed_n)
-###				else:
-###					species_dist_dict[specie_name]=[parsed_n]
-###
-###		if DEBUG_FLAG == 1: print("DDDDDDDDDDDDDD - > Dist by name:")
-###		if DEBUG_FLAG == 1: print(species_dist_dict)
-###		#Calc dist and max for each
-###		#calc_distribution(species_dist_dict,Output_ForCounts + '/' + genus + '.counts')
-###
-###		#species_list_unique=set(species_names)
-###		#file_out.write(str(species_list_unique))
-###		#file_out.write(str(len(species_list_unique)))
-###		for specie in species_names:
-###			if DEBUG_FLAG == 1: print(specie)
-###			if DEBUG_FLAG == 1: print("%s,%s\n" %(genus,specie))
-###			if DEBUG_FLAG == 1: file_out.write("%s,%s,%s,%s,%s\n" % (genus, specie,species_median_dict[specie],species_parsed_n_dict[specie],species_status_dict[specie]))
-###			specie_=escape_organism_name(specie)
-###			#specie_=specie_x.replace(' ','_')
-###			if not species_median_dict[specie]:
-###				file_out.write('### None value for  %s' % specie_name)
-###				continue
-###			else:
-###				counts_file.write('>%s\n' % specie_)
-###				counts_file.write('%s\n' % species_median_dict[specie])
-###				count_counts+=1
-###		#Check number of counts:
-###		if count_counts < 5:
-###			less_f = open(Output_ForCounts + '/LESS_THAN_5_COUNTS','w')
-###			less_f.close()
-###			#file_LessThan5Counts.write(genus+'\n')
-###
-###
