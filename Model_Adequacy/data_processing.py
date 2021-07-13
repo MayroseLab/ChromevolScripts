@@ -125,9 +125,9 @@ def get_params(res_file, freq_file):
     :param freq_file: root frequencies file to be written to
     :return: parameters dictionary
     """
-    d1 = dict.fromkeys(["LOSS_CONST", "GAIN_CONST", "DUPL", "BASE_NUMBER_R", "BASE_NUMBER", "HALF_DUPL"], None)
-    d2 = dict.fromkeys(["_lossConstR", "_gainConstR", "_duplConstR", "_baseNumberR", "_baseNumber", "_demiPloidyR"], None)
-    mapping_dict = {"_lossConstR": "LOSS_CONST", "_gainConstR": "GAIN_CONST", "_duplConstR": "DUPL", "_baseNumberR": "BASE_NUMBER_R",  "_baseNumber": "BASE_NUMBER", "_demiPloidyR": "HALF_DUPL"}
+    d1 = dict.fromkeys(["LOSS_CONST", "GAIN_CONST", "GAIN_LINEAR", "LOSS_LINEAR", "DUPL", "BASE_NUMBER_R", "BASE_NUMBER", "HALF_DUPL"], None)
+    d2 = dict.fromkeys(["_lossConstR", "_gainConstR", "_gainLinearR", "_lossLinearR", "_duplConstR", "_baseNumberR", "_baseNumber", "_demiPloidyR"], None)
+    mapping_dict = {"_lossConstR": "LOSS_CONST", "_gainConstR": "GAIN_CONST", "_gainLinearR": "GAIN_LINEAR", "_lossLinearR": "LOSS_LINEAR", "_duplConstR": "DUPL", "_baseNumberR": "BASE_NUMBER_R",  "_baseNumber": "BASE_NUMBER", "_demiPloidyR": "HALF_DUPL"}
     params = tuple(d1.keys())
     with open(res_file, "r") as res:
         d1 = get_rate_parameters(res, params, d1, freq_file)

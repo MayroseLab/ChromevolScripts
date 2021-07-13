@@ -495,28 +495,33 @@ def parse_counts_file(countsFile):
 				flag_name=0
 	return counts_dict_all
 # ----------------------------------------------------------------------------------------------------------#
-def summarize_reliability_for_power(relSim,relInf,countsFile,outFile):
+def summarize_reliability_for_power(relSim,relInf,countsFile,outFile,outFile2):
 
 	# parse files
-	relSimHash = parse_reliability_file(relSim)
+	relSimHash = parse_reliability_file(relSim) 
 	relInfHash = parse_reliability_file(relInf)
 
 	# compare and print to output
 	with open(outFile,'w') as OUT:
-		#OUT.write('"Taxon", "Chromosome count", "Ploidy inference", "Phylogeny robustness score", '
-		#'"Simulation reliability score","Combined score"\n')
-		OUT.write('Taxon,Chromosome count,Ploidy inference,Phylogeny robustness score,'
-		'Simulation reliability score,Combined score\n')
+		with open(outFile2,'w') as OUT2:
+			#OUT.write('"Taxon", "Chromosome count", "Ploidy inference", "Phylogeny robustness score", '
+			#'"Simulation reliability score","Combined score"\n')
+			OUT2.write ('"Header1","Header2","Header3","Header4","Header5","Header6"\n')
+			OUT.write('Taxon,Chromosome count,Ploidy inference,Phylogeny robustness score,'
+			'Simulation reliability score,Combined score\n')
+			OUT2.write('Taxon,Chromosome count,Ploidy inference,Phylogeny robustness score,'
+			'Simulation reliability score,Combined score\n')
 
-		countsHash = parse_counts_file(countsFile)
-		taxa =  list(relSimHash.keys())
-		for taxon in taxa:
-			count = countsHash[taxon]
-			infer = relInfHash[taxon][0]
-			phyloRobust = relInfHash[taxon][1]
-			simReliability = relSimHash[taxon][1]
-			combinedScore = (float(phyloRobust)/2 + float(simReliability)/2)
-			OUT.write('"%s","%s","%s","%s","%s","%s"\n' % (taxon,count,infer,phyloRobust,simReliability,combinedScore))
+			countsHash = parse_counts_file(countsFile)
+			taxa =  list(relSimHash.keys())
+			for taxon in taxa:
+				count = countsHash[taxon]
+				infer = relInfHash[taxon][0]
+				phyloRobust = relInfHash[taxon][1]
+				simReliability = relSimHash[taxon][1]
+				combinedScore = (float(phyloRobust)/2 + float(simReliability)/2)
+				OUT.write('"%s","%s","%s","%s","%s","%s"\n' % (taxon,count,infer,phyloRobust,simReliability,combinedScore))
+				OUT2.write('"%s","%s","%s","%s","%s","%s"\n' % (taxon,count,infer,phyloRobust,simReliability,combinedScore))
 
 	return
 # ----------------------------------------------------------------------------------------------------------#

@@ -39,107 +39,119 @@ TREES_NUM = 1
 #----------------------------------------------------------------------------------------------------------#
 def MA_Test(tree_dir,BestModel,model_adq_flag,param_dict):
 
-#	BestModel, AIC_per_model_dict = summarize_results(working_dir, tree_dir, models_list, param_dict)
-	BestModels_perTree_dict[tree_dir] = BestModel
-	bestModelsPerTree_f.write("%s," % BestModel)
+	try: 
+		#BestModel, AIC_per_model_dict = summarize_results(working_dir, tree_dir, models_list, param_dict)
+		BestModels_perTree_dict[tree_dir] = BestModel
+		bestModelsPerTree_f.write("%s," % BestModel)
 
-	# if model_adq_flag == 'OFF':
-	#	continue
-	# Otherwise perform Model Adequacy:
-	f_ModelAd = open(working_dir + '/ModelAd_log.txt', 'a')
-	# AdequacyTest
-	# This code was taken from Anna R. code for Model Adequacy and edited by Michal
-	if model_adq_flag == 'OFF':
-		model_adq_list = ['None']
-		return 0
-	else:
-		model = BestModel  # deault ????
-		f_ModelAd.write("Model Adequacy param set to: user model selection\n")
-		f_ModelAd.write("param_dict['MA_AdequacyTest']: %s\n" % param_dict['MA_AdequacyTest'])
-		f_ModelAd.write("BestModel: %s\n" % BestModel)
-
-		model_adq_list = []
-		if param_dict['MA_AdequacyTest'] == 'MA_AdequacyTest_user':
+		# if model_adq_flag == 'OFF':
+		#	continue
+		# Otherwise perform Model Adequacy:
+		f_ModelAd = open(working_dir + '/ModelAd_log.txt', 'a')
+		# AdequacyTest
+		# This code was taken from Anna R. code for Model Adequacy and edited by Michal
+		if model_adq_flag == 'OFF':
+			model_adq_list = ['None']
+			return 0
+		else:
+			model = BestModel  # deault ????
 			f_ModelAd.write("Model Adequacy param set to: user model selection\n")
-			f_ModelAd.write("User model selection is: %s\n" % param_dict['MA_userModelSelect'])
-			model_adq_list = [param_dict['MA_userModelSelect']]
-		elif param_dict['MA_AdequacyTest'] == 'ChromBestModel':
-			f_ModelAd.write("Model Adequacy param set to: chromevol best model\n")
-			f_ModelAd.write("Chromevol best model is: %s\n" % BestModel)
-			model_adq_list = [BestModel]
-		elif param_dict['MA_AdequacyTest'] == 'AllModels':
-			f_ModelAd.write("Model Adequacy param set to: chromevol best model\n")
-			f_ModelAd.write("Chromevol best model is: %s\n" % BestModel)
-			model_adq_list = models_list
+			f_ModelAd.write("param_dict['MA_AdequacyTest']: %s\n" % param_dict['MA_AdequacyTest'])
+			f_ModelAd.write("BestModel: %s\n" % BestModel)
 
-		for model in model_adq_list:
-			# -c directory of ChromEvol results (where the dirs of the models are, and results_sum is)
-			# -m model name
-			# -id an identifier (number of genus name, I think it is used only for printing purposes)
-			# -ce ChromEvol path
-			# -co counts file (usually named XXcounts_edit)
-			# -t tree file (usually named tree_1)
-			main_res_dir = tree_dir + '/' + model + '/'
+			model_adq_list = []
+			if param_dict['MA_AdequacyTest'] == 'MA_AdequacyTest_user':
+				f_ModelAd.write("Model Adequacy param set to: user model selection\n")
+				f_ModelAd.write("User model selection is: %s\n" % param_dict['MA_userModelSelect'])
+				model_adq_list = [param_dict['MA_userModelSelect']]
+			elif param_dict['MA_AdequacyTest'] == 'ChromBestModel':
+				f_ModelAd.write("Model Adequacy param set to: chromevol best model\n")
+				f_ModelAd.write("Chromevol best model is: %s\n" % BestModel)
+				model_adq_list = [BestModel]
+			elif param_dict['MA_AdequacyTest'] == 'AllModels':
+				f_ModelAd.write("Model Adequacy param set to: chromevol best model\n")
+				f_ModelAd.write("Chromevol best model is: %s\n" % BestModel)
+				model_adq_list = models_list
 
-			treeNum = re.search("(\d+)$", tree_dir).group(1)
+			for model in model_adq_list:
+				# -c directory of ChromEvol results (where the dirs of the models are, and results_sum is)
+				# -m model name
+				# -id an identifier (number of genus name, I think it is used only for printing purposes)
+				# -ce ChromEvol path
+				# -co counts file (usually named XXcounts_edit)
+				# -t tree file (usually named tree_1)
+				main_res_dir = tree_dir + '/' + model + '/'
 
-			#model_adeq_py_cmd = 'python /bioseq/chromEvol/Model_Adequecy/main_for_web.py -c ' \
-			#					'%s -m %s -id %s ' \
-			#					'-nt 1 -ns 10 -ce %s ' \
-			#					'-co %s -s 0 -r 0' \
-			#					% (main_res_dir, model, JobID, param_dict['_chromevolExe'], param_dict['_dataFile'])
-			# START OF NEW MA PIPELINE
-			new_tree_file = main_res_dir + "/mlAncestors.tree"
-			new_res_file = main_res_dir + "/chromEvol.res"
-			model_adeq_py_cmd = 'python /bioseq/chromEvol/Model_Adequacy/main_for_web.py -c ' \
-								'%s -t %s -r %s ' \
-								'-out %s -n 1000 ' \
-								% (param_dict['_dataFile'], new_tree_file, new_res_file, main_res_dir)
-			# END OF NEW MA PIPELINE
+				treeNum = re.search("(\d+)$", tree_dir).group(1)
 
-			print_to_log(model_adeq_py_cmd, Log_f)
-			ma_status = os.system(model_adeq_py_cmd)
-			print_to_log(str(ma_status), Log_f)
+				#model_adeq_py_cmd = 'python /bioseq/chromEvol/Model_Adequecy/main_for_web.py -c ' \
+				#					'%s -m %s -id %s ' \
+				#					'-nt 1 -ns 10 -ce %s ' \
+				#					'-co %s -s 0 -r 0' \
+				#					% (main_res_dir, model, JobID, param_dict['_chromevolExe'], param_dict['_dataFile'])
+				# START OF NEW MA PIPELINE
+				new_tree_file = main_res_dir + "/mlAncestors.tree"
+				new_res_file = main_res_dir + "/chromEvol.res"
+				model_adeq_py_cmd = 'python /bioseq/chromEvol/Model_Adequacy/main_for_web.py -c ' \
+									'%s -t %s -r %s ' \
+									'-out %s -n 1000 ' \
+									% (param_dict['_dataFile'], new_tree_file, new_res_file, main_res_dir)
+				# END OF NEW MA PIPELINE
 
-	return model_adq_list
+				print_to_log(model_adeq_py_cmd, Log_f)
+				ma_status = os.system(model_adeq_py_cmd)
+				print_to_log(str(ma_status), Log_f)
+
+		return model_adq_list
+		
+	except: 
+		Error_f = working_dir + '/Error.txt'
+		fail ('Model adequacy failed.', 'model_adequacy', Error_f)
 
 #----------------------------------------------------------------------------------------------------------#
 def create_ploidy(working_tree_dirs,working_dir):
 
-	thresFilePP = working_dir + '/thresholds_PP'
-	thresFileDP = working_dir + '/thresholds_DP'
+	try: 
+		thresFilePP = working_dir + '/thresholds_PP'
+		thresFileDP = working_dir + '/thresholds_DP'
 
-	## Determine threshold for calling diploids/polyploids (using simulations)
-	ploidyCallType = "DUPL DEMI BASE"  # MD: ???? any other options?
+		## Determine threshold for calling diploids/polyploids (using simulations)
+		ploidyCallType = "DUPL DEMI BASE"  # MD: ???? any other options?
 
-	print_to_log("Before determine_thresholds_for_power line 102\n", working_dir + '/Log.txt')
+		print_to_log("Before determine_thresholds_for_power line 102\n", working_dir + '/Log.txt')
 
-	thresPP, thresDP = determine_thresholds_for_power(working_tree_dirs, thresFilePP, thresFileDP, ploidyCallType)
-	print(thresPP)
-	print(thresDP)
+		thresPP, thresDP = determine_thresholds_for_power(working_tree_dirs, thresFilePP, thresFileDP, ploidyCallType)
+		print(thresPP)
+		print(thresDP)
 
-	print_to_log("thresPP %f thresDP %f\n"%(thresPP,thresDP), working_dir + '/Log.txt')
+		print_to_log("thresPP %f thresDP %f\n"%(thresPP,thresDP), working_dir + '/Log.txt')
 
-	## Compute reliability from real inference
-	relInfer = working_dir + '/reliability_infer.txt'
-	if compute_reliability_from_real_for_power(working_tree_dirs, thresPP, thresDP, relInfer,
-											   ploidyCallType) != 'DONE':
-		print("ERROR: Failed to compute reliability from real inferences\n")
-	inferReliabilityRef = parse_reliability_file(relInfer)
+		## Compute reliability from real inference
+		relInfer = working_dir + '/reliability_infer.txt'
+		if compute_reliability_from_real_for_power(working_tree_dirs, thresPP, thresDP, relInfer,
+												   ploidyCallType) != 'DONE':
+			print("ERROR: Failed to compute reliability from real inferences\n")
+		inferReliabilityRef = parse_reliability_file(relInfer)
 
-	## Compute reliability from simulations inference
-	relSim = working_dir + '/reliability_sims.txt'
-	if compute_reliability_from_sim_for_power(working_tree_dirs, thresDP, thresPP, ploidyCallType, relSim,
-											  inferReliabilityRef) != 'DONE':
-		print("ERROR: Failed to compute reliability from simulations\n")
+		## Compute reliability from simulations inference
+		relSim = working_dir + '/reliability_sims.txt'
+		if compute_reliability_from_sim_for_power(working_tree_dirs, thresDP, thresPP, ploidyCallType, relSim,
+												  inferReliabilityRef) != 'DONE':
+			print("ERROR: Failed to compute reliability from simulations\n")
 
-	## Summarize reliability -  use counts edit file
-	countsEditFile = param_dict[
-		'_dataFile']  # MD changed from: my @countsEdit = grep {/counts_edit$/} readdir(DIR);
-	finalOut = working_dir + '/ploidy.csv'
-	summarize_reliability_for_power(relSim, relInfer, countsEditFile, finalOut)
-	print_to_log("End OF create_ploidy functions",working_dir + '/Log.txt')
-	return
+		## Summarize reliability -  use counts edit file
+		countsEditFile = param_dict[
+			'_dataFile']  # MD changed from: my @countsEdit = grep {/counts_edit$/} readdir(DIR);
+		finalOut = working_dir + '/ploidy.csv'
+		finalOut2 = working_dir + '/ploidy_html.csv'
+		summarize_reliability_for_power(relSim, relInfer, countsEditFile, finalOut, finalOut2)
+		print_to_log("End OF create_ploidy functions",working_dir + '/Log.txt')
+		return
+		
+	except: 
+	
+		Error_f = working_dir + '/Error.txt'
+		fail ('Ploidy inference failed.', 'ploidy_inference', Error_f)
 
 #----------------------------------------------------------------------------------------------------------#
 def send_start_email(param_dict,working_dir):
@@ -463,6 +475,25 @@ def changeModelName(str):
 	if str == "BASE_NUM_DUPL":
 		return " DysBnumDup"
 
+def convertParamKeysToNames(key):
+	if key == "BASE_NUMBER_R":
+		return "Base (monoploid) number addition"
+	elif key == "DUPL":
+		return "Duplication"
+	elif key == "GAIN_CONST":
+		return "Ascending dysploidy"
+	elif key == "HALF_DUPL":
+		return "Duplication by 1.5"
+	elif key == "LOSS_CONST":
+		return "Descending dysploidy"
+	elif key == "BASE_NUMBER":
+		return "Base (monoploid) number"
+	elif key == "LOSS_LINEAR":
+		return "Linear descending dysploidy";
+	elif key == "GAIN_LINEAR":
+		return "Linear ascending dysploidy";
+	else:
+		return key;
 
 def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_dict, param_dict):
 
@@ -485,7 +516,7 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 	if model_adq_list:
 		out_f2 = open(results_dir + '/MA_RESULT_PRINTOUT.csv', 'w')
 	model_params_data_dict = dict()
-	param_keys = ['BASE_NUMBER_R', 'DUPL', 'GAIN_CONST', 'HALF_DUPL', 'LOSS_CONST', 'BASE_NUMBER', 'Distance from best AIC']
+	param_keys = ['BASE_NUMBER_R', 'DUPL', 'GAIN_CONST', 'GAIN_LINEAR', 'HALF_DUPL', 'LOSS_CONST', 'LOSS_LINEAR', 'BASE_NUMBER', 'Distance from best AIC']
 	for tree_num in tree_paths.keys():	#at this point 1 tree only
 		for model_name in models_list:
 			print_to_log("results: line 286 - model %s"%model_name, results_dir + '/Log.txt')
@@ -573,7 +604,8 @@ def Create_results_for_web(results_dir,models_list,model_adq_list,AIC_per_model_
 		# out_f.write('"%s",' % new_model_name)
 	out_f.write('\n')
 	for idx in range(0, len(param_keys)):
-		out_f.write('"%-25s",' % param_keys[idx])
+		#out_f.write('"%-25s",' % param_keys[idx])
+		out_f.write('"%-25s",' % convertParamKeysToNames(param_keys[idx]))
 		for model in model_list_sort:
 			if param_keys[idx] in model_params_data_dict[model].keys():
 				out_f.write('"%-15s",' % model_params_data_dict[model][param_keys[idx]])
@@ -1461,25 +1493,25 @@ def edit_counts_file(working_dir,chosenTree, countsFile, outCounts, jobId, assig
 	#check if species have counts on ccdb:
 	if species_without_counts:
 		spc_found_ccdb = search_counts_in_CCDB(species_without_counts, working_dir)
-		f_inputs_taxa_report.write("The following species were found in your phylogeny but are missing in "
+		f_inputs_taxa_report.write("<br>The following species were found in your phylogeny but are missing in "
 		"your counts file:<br>\n %s<br>\n" %(', '.join(map(str, species_without_counts))))
 		#f_inputs_taxa_report.write("<a href=\"chromEvol_results/" + jobId + "/RemoveSpc.txt\" target=\"_blank\">[Missing Spc],</a>")
 		if spc_found_ccdb:
-			f_inputs_taxa_report.write('Note that the following species have counts data in '
+			f_inputs_taxa_report.write('<br>Note that the following species have counts data in '
 			'<a href="http://ccdb.tau.ac.il/" target="_blank"> CCDB:</a><br>\n %s<br>\n' %
 			(', '.join(map(str, spc_found_ccdb))))
 		flag_at_least_one = 1
 		if assignMissingData: 
-			f_inputs_taxa_report.write('Assigning missing taxa as x.\n')
+			f_inputs_taxa_report.write('<br>Assigning missing taxa as x.\n')
 		else: 
-			f_inputs_taxa_report.write('Removing tips with no counts data.\n')
+			f_inputs_taxa_report.write('<br>Removing tips with no counts data.\n')
 		with open(working_dir + '/Status.txt', 'w') as stats_f:
 			stats_f.write("We found a mismatch between your phylogeny and counts file, see detailes below.")
 
 	#Check if species in counts file are missing from phylogeny:
 	spc_missing_from_phylogeny=list(set(spc_list_in_counts)-set(spc_list_on_tree))
 	if spc_missing_from_phylogeny:
-		f_inputs_taxa_report.write("The following species were found in your counts file but are missing in "
+		f_inputs_taxa_report.write("<br>The following species were found in your counts file but are missing in "
 		"your phylogeny file:<br>\n %s<br>\n" %(', '.join(map(str, spc_missing_from_phylogeny))))
 		spc_missing_from_phylogeny_no_underscore = [x.replace('_',' ') for x in spc_missing_from_phylogeny]
 		spc_found_ncbiDB = search_spc_in_NCBI(spc_missing_from_phylogeny_no_underscore, working_dir,f_inputs_taxa_report)
@@ -1774,7 +1806,7 @@ try:
 			if stats_r != 0:
 				print_to_log("Prune R status is %s" % stats_r, Log_f)
 				error = f'Prune R status is {stats_r}'
-				fail (error, "runtime", Error_f)
+				fail (error, "validation", Error_f)
 			else:
 				shutil.copyfile(working_dir +'/TreesFile.txt',working_dir +'/TreesFile_Origin.txt')
 				shutil.copyfile(working_dir +'/TreesFile_R.txt',working_dir +'/TreesFile.txt')
@@ -1921,7 +1953,7 @@ try:
 	#Create_results_for_web(working_dir,models_list,model_adq_list,AIC_per_model_dict, param_dict)
 	Create_results_for_web(working_dir,models_list,[],AIC_per_model_dict, param_dict)
 	with open(working_dir+'/Status.txt','w') as stats_f:
-		stats_f.write("Results files ready")
+		stats_f.write("chromEvol results ready. Running downstream analyses")
 	stats_f.close()
 	
 	#------------------------------     MODEL ADEQUACY     ------------------------------#
@@ -2037,10 +2069,24 @@ except Exception as e:
 		JobID = os.path.basename(os.path.normpath(working_dir))
 		send_mail_cmd = f'mailto:evolseq@post.tau.ac.il?subject=chromEvol%20Run%20No.:%20{JobID}'
 		status_msg = 'Error while running, please <a href="{send_mail_cmd}">contact us</a> for more details.'
-		
-	# write input validation message
 	
-	with open(working_dir+'/taxa_input_report.txt','w') as f_inputs_report:
+	# get error type
+	# write input validation message
+	if len(e.args) > 1: 
+		error_type = e.args[1];
+	else:
+		error_type = 'runtime';
+	
+	if error_type == "validation":
+		error_report_file = working_dir+'/taxa_input_report.txt';
+	elif error_type == "ploidy_inference":
+		error_report_file = working_dir+'/ploidy_inference_error.txt';
+	elif error_type == "model_adequacy":
+		error_report_file = working_dir+'/model_adequacy_error.txt';
+	else: 
+		error_report_file = working_dir+'/runtime_error.txt';
+		
+	with open(error_report_file,'w') as f_inputs_report:
 		f_inputs_report.write(error_msg)
 	f_inputs_report.close()
 
