@@ -49,13 +49,13 @@ calculate_stat = function(tree){
 
 results_lst = c()
 if (iter==1){
-	tree = read.newick(tree_file)
+	tree = read.tree(tree_file)
 	results_lst = calculate_stat(tree)
 } else {
 	tree_file = "simTree.phr"
 	for (n in (1:iter)-1){
 		fix_tree(paste(sims_dir,n,tree_file,sep="/")) # fix .phy file
-		tree = read.newick(paste(sims_dir,n,tree_file,sep="/"))
+		tree = read.tree(paste(sims_dir,n,tree_file,sep="/"))
 		stat = try(calculate_stat(tree))
 		if (inherits(stat,'try-error')){
 			next

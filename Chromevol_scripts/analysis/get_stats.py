@@ -1,7 +1,7 @@
 from MA_defs import *
 import os
 from ete3 import Tree
-import regex as re
+import re
 import argparse
 
 def calculate_statistics(counts,filename, tree_file,simulated_counts_file = False):
